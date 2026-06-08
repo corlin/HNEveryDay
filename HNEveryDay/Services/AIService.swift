@@ -61,7 +61,38 @@ final class AIService: Sendable {
     } else {
       isChinese = preferredLang == "zh-Hans"
     }
-    let langInstruction = isChinese ? "Answer in Simplified Chinese (简体中文)." : ""
+    let summaryFormat: String
+    if isChinese {
+      summaryFormat = """
+        ## 📝 文章核心
+        [用 2-3 句话总结文章核心价值]
+
+        ## 💬 讨论焦点
+        - **[要点 1]**: [简要说明]
+        - **[要点 2]**: [简要说明]
+        - **[要点 3]**: [简要说明]
+
+        ## 🎯 结论
+        [用 1-2 句话给出综合判断]
+        """
+    } else {
+      summaryFormat = """
+        ## 📝 Core Idea
+        [2-3 sentences summarizing the article's core value proposition]
+
+        ## 💬 Discussion Focus
+        - **[Key Point 1]**: [Brief explanation]
+        - **[Key Point 2]**: [Brief explanation]
+        - **[Key Point 3]**: [Brief explanation]
+
+        ## 🎯 Takeaway
+        [1-2 sentences with your synthesis]
+        """
+    }
+    let langInstruction =
+      isChinese
+      ? "Answer in Simplified Chinese (简体中文)."
+      : "Answer in English."
 
     if let content = articleContent, !content.isEmpty {
       prompt += "\nArticle Content (Excerpt):\n"
@@ -82,16 +113,7 @@ final class AIService: Sendable {
 
       Task: Provide a well-structured summary using the following format:
 
-      ## 📝 文章核心
-      [2-3 sentences summarizing the article's core value proposition]
-
-      ## 💬 讨论焦点
-      - **[Key Point 1]**: [Brief explanation]
-      - **[Key Point 2]**: [Brief explanation]  
-      - **[Key Point 3]**: [Brief explanation]
-
-      ## 🎯 结论
-      [1-2 sentences with your synthesis]
+      \(summaryFormat)
 
       Keep it concise (under 250 words). Use bullet points for clarity. \(langInstruction)
       """
