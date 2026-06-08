@@ -106,27 +106,50 @@ class DataService: ObservableObject {
     }
   }
 
-  func saveContent(id: Int, content: String) {
+  func fetchCachedStory(id: Int) -> CachedStory? {
     let context = container.mainContext
     let descriptor = FetchDescriptor<CachedStory>(predicate: #Predicate { $0.id == id })
     do {
+      return try context.fetch(descriptor).first
+    } catch {
+      print("Failed to fetch cached story: \(error)")
+      return nil
+    }
+  }
+
+  func saveContent(id: Int, title: String, url: String?, content: String) {
+    let context = container.mainContext
+    let descriptor = FetchDescriptor<CachedStory>(predicate: #Predicate { $0.id == id })
+    do {
+      let story: CachedStory
       if let existing = try context.fetch(descriptor).first {
-        existing.contentHTML = content
-        try context.save()
+        story = existing
+      } else {
+        story = CachedStory(id: id, title: title, url: url)
+        context.insert(story)
       }
+      story.contentHTML = content
+      story.lastOpened = Date()
+      try context.save()
     } catch {
       print("Failed to save content: \(error)")
     }
   }
 
-  func saveSummary(id: Int, summary: String) {
+  func saveSummary(id: Int, title: String, url: String?, summary: String) {
     let context = container.mainContext
     let descriptor = FetchDescriptor<CachedStory>(predicate: #Predicate { $0.id == id })
     do {
+      let story: CachedStory
       if let existing = try context.fetch(descriptor).first {
-        existing.summary = summary
-        try context.save()
+        story = existing
+      } else {
+        story = CachedStory(id: id, title: title, url: url)
+        context.insert(story)
       }
+      story.summary = summary
+      story.lastOpened = Date()
+      try context.save()
     } catch {
       print("Failed to save summary: \(error)")
     }

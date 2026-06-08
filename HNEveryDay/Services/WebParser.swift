@@ -31,32 +31,17 @@ class WebParser: NSObject, WKNavigationDelegate {
     super.init()
     self.webView.navigationDelegate = self
 
-    // Load Readability.js
-    if let path = Bundle.main.path(forResource: "Readability", ofType: "js") {
+    if let url = Bundle.main.url(forResource: "Readability", withExtension: "js") {
       do {
-        self.readabilityJS = try String(contentsOfFile: path, encoding: .utf8)
+        self.readabilityJS = try String(contentsOf: url, encoding: .utf8)
       } catch {
         print("Failed to load Readability.js: \(error)")
       }
-    } else {
-      // Fallback: Try loading from Utilities dir if Bundle fails (development environment)
-      // In a real app, make sure to add Readability.js to the Target's "Copy Bundle Resources"
     }
   }
 
-  // For now, let's assume we can load the JS string manually if bundle fails,
-  // or better, providing a hardcoded fallback or reading the file we just downloaded
-  // In this context, we'll read from the file path we just curl'd to.
-
   private func loadJS() -> String? {
-    if let js = readabilityJS { return js }
-    // Attempt to read from source path (Simulator environment usually creates a bundle, but let's be safe)
-    // Hardcoded path for this environment purely for reliability in this session
-    let path = "/Users/corlin/appdev/HNEveryDay/HNEveryDay/Utilities/Readability.js"
-    if FileManager.default.fileExists(atPath: path) {
-      return try? String(contentsOfFile: path, encoding: .utf8)
-    }
-    return nil
+    readabilityJS
   }
 
   func parse(url: URL) async throws -> ParsedArticle {

@@ -19,6 +19,10 @@ struct SettingsView: View {
 
   @Environment(\.dismiss) private var dismiss
 
+  private var appVersion: String {
+    Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+  }
+
   // Provider Preset Logic
   enum AIProvider: String, CaseIterable, Identifiable {
     case openai = "OpenAI"
@@ -162,7 +166,7 @@ struct SettingsView: View {
 
         // MARK: - About
         Section("About") {
-          LabeledContent("Version", value: "0.04")
+          LabeledContent("Version", value: appVersion)
           Link(destination: URL(string: "https://github.com/corlin/HNEveryDay")!) {
             HStack {
               Text("GitHub")

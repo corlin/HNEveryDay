@@ -158,6 +158,7 @@ struct ItemDetailView: View {
     .sheet(isPresented: $showSummary) {
       SummaryView(
         item: item, comments: flattenedComments, article: parsedArticle,
+        initialSummary: summaryTextForExport,
         onSummaryGenerated: { summary in
           self.summaryTextForExport = summary
         }
@@ -174,6 +175,7 @@ struct ItemDetailView: View {
     // Force comments mode if no URL
     .onAppear {
       DataService.shared.markAsRead(item: item)
+      summaryTextForExport = DataService.shared.fetchCachedStory(id: item.id)?.summary
       if item.url == nil {
         selectedMode = 1
       }
@@ -184,6 +186,22 @@ struct ItemDetailView: View {
     guard let url = item.urlObj else { return }
     guard parsedArticle == nil else { return }
 
+    if let cachedContent = await MainActor.run(body: {
+      DataService.shared.fetchCachedStory(id: item.id)?.contentHTML
+    }) {
+      await MainActor.run {
+        self.parsedArticle = ParsedArticle(
+          title: item.title,
+          byline: item.by,
+          contentHTML: cachedContent,
+          textContent: HTMLHelper.stripTags(cachedContent),
+          excerpt: nil,
+          siteName: url.host
+        )
+      }
+      return
+    }
+
     isParsingArticle = true
     do {
       // Attempt to parse
@@ -192,7 +210,12 @@ struct ItemDetailView: View {
         self.parsedArticle = article
         // Save to Persistence
         if let html = article.contentHTML {
-          DataService.shared.saveContent(id: item.id, content: html)
+          DataService.shared.saveContent(
+            id: item.id,
+            title: item.title ?? article.title ?? "Untitled",
+            url: item.url,
+            content: html
+          )
         }
       }
     } catch {

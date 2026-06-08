@@ -6,16 +6,9 @@
 //
 
 import Foundation
-import SwiftUI
 
 final class AIService: Sendable {
   static let shared = AIService()
-
-  // User Configuration
-  // In a real app, use Keychain. For now, AppStorage/UserDefaults via a helper.
-  @AppStorage("ai_api_key") private var userApiKey: String = ""
-  @AppStorage("ai_base_url") private var userBaseURL: String = "https://api.openai.com/v1"
-  @AppStorage("ai_model") private var userModel: String = "gpt-3.5-turbo"
 
   // Request Models
   struct ChatMessage: Codable {
@@ -112,8 +105,6 @@ final class AIService: Sendable {
       ],
       temperature: 0.7
     )
-
-    print("🤖 AI Prompt: \(prompt)")
 
     let endpoint =
       URL(string: baseUrl)?.appendingPathComponent("chat/completions") ?? URL(

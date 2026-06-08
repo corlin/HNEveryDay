@@ -25,31 +25,27 @@ struct FeedView: View {
               description: Text("Swipe left on a story to save it."))
           } else {
             ForEach(savedStories, id: \.id) { cached in
-              // Convert CachedStory to minimal display
-              HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "bookmark.fill")
-                  .foregroundStyle(.orange)
-                VStack(alignment: .leading, spacing: 4) {
-                  Text(cached.title)
-                    .font(.headline)
-                  if let url = cached.url {
-                    Text(url)
-                      .font(.caption)
-                      .foregroundStyle(.secondary)
-                      .lineLimit(1)
+              let savedItem = item(from: cached)
+              NavigationLink(destination: ItemDetailView(item: savedItem)) {
+                HStack(alignment: .top, spacing: 12) {
+                  Image(systemName: "bookmark.fill")
+                    .foregroundStyle(.orange)
+                  VStack(alignment: .leading, spacing: 4) {
+                    Text(cached.title)
+                      .font(.headline)
+                    if let url = cached.url {
+                      Text(url)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    }
                   }
                 }
               }
               .padding(.vertical, 4)
               .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                 Button(role: .destructive) {
-                  // Remove from saved by finding HNItem or using ID
-                  // For simplicity, we'll create a minimal HNItem
-                  let tempItem = HNItem(
-                    id: cached.id, type: .story, by: nil, time: Date(), text: nil, url: cached.url,
-                    score: nil, title: cached.title, descendants: nil, kids: nil, parent: nil,
-                    deleted: nil, dead: nil)
-                  dataService.toggleSave(item: tempItem)
+                  dataService.toggleSave(item: savedItem)
                 } label: {
                   Label("Remove", systemImage: "trash")
                 }
@@ -160,6 +156,24 @@ struct FeedView: View {
       // Housekeeping
       dataService.cleanupOldEntries()
     }
+  }
+
+  private func item(from cached: CachedStory) -> HNItem {
+    HNItem(
+      id: cached.id,
+      type: .story,
+      by: nil,
+      time: cached.lastOpened,
+      text: nil,
+      url: cached.url,
+      score: nil,
+      title: cached.title,
+      descendants: nil,
+      kids: nil,
+      parent: nil,
+      deleted: nil,
+      dead: nil
+    )
   }
 }
 

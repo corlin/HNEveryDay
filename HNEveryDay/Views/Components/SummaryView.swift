@@ -11,11 +11,29 @@ struct SummaryView: View {
   let item: HNItem
   let comments: [CommentNode]
   let article: ParsedArticle?
+  let initialSummary: String?
   var onSummaryGenerated: ((String) -> Void)?
 
   @State private var summaryText: String = ""
   @State private var isLoading = true
   @State private var errorMsg: String?
+
+  init(
+    item: HNItem,
+    comments: [CommentNode],
+    article: ParsedArticle?,
+    initialSummary: String? = nil,
+    onSummaryGenerated: ((String) -> Void)? = nil
+  ) {
+    let cachedSummary = initialSummary?.isEmpty == false ? initialSummary : nil
+    self.item = item
+    self.comments = comments
+    self.article = article
+    self.initialSummary = cachedSummary
+    self.onSummaryGenerated = onSummaryGenerated
+    _summaryText = State(initialValue: cachedSummary ?? "")
+    _isLoading = State(initialValue: cachedSummary == nil)
+  }
 
   var body: some View {
     NavigationStack {
@@ -66,7 +84,9 @@ struct SummaryView: View {
       }
     }
     .task {
-      await generateSummary()
+      if initialSummary == nil {
+        await generateSummary()
+      }
     }
   }
 
@@ -91,6 +111,12 @@ struct SummaryView: View {
       await MainActor.run {
         self.summaryText = result
         self.isLoading = false
+        DataService.shared.saveSummary(
+          id: item.id,
+          title: item.title ?? "Untitled",
+          url: item.url,
+          summary: result
+        )
         self.onSummaryGenerated?(result)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
       }

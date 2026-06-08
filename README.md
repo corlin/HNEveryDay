@@ -89,7 +89,7 @@ Get the "Hacker Perspective" in seconds.
     - *The App automatically fills the correct Base URL and Model Name.*
 3. Paste your **API Key**.
 4. (Optional) You can manually edit the Model Name to use specific versions (e.g., `deepseek-coder`).
-5. Tap **Done**. Keys are stored securely on-device using `AppStorage`.
+5. Tap **Done**. Keys are stored securely on-device using iOS Keychain.
 
 ---
 
