@@ -43,7 +43,7 @@ protocol HNClientSession: Sendable {
 extension URLSession: HNClientSession {}
 
 final class HNClient: Sendable {
-  static let shared = HNClient()
+  nonisolated static let shared = HNClient()
   private let baseURL: URL
   private let session: any HNClientSession
 

@@ -7,9 +7,20 @@
 
 import Foundation
 
+protocol HNCommentFetching: Sendable {
+  func fetchItems(ids: [Int]) async throws -> [HNItem]
+}
+
+extension HNClient: HNCommentFetching {}
+
 actor CommentLoader {
   // Cache to prevent re-fetching
   private var cache: [Int: HNItem] = [:]
+  private let client: any HNCommentFetching
+
+  init(client: any HNCommentFetching = HNClient.shared) {
+    self.client = client
+  }
 
   /// Recursively fetches comments up to a certain depth or limit.
   /// Returns the root node populated with children.
@@ -22,7 +33,7 @@ actor CommentLoader {
     guard depth < 10 else { return [] }
 
     // Parallel fetch of items at this level
-    let items = try await HNClient.shared.fetchItems(ids: ids)
+    let items = try await fetchItems(ids: ids)
 
     // We need to fetch children's children *in parallel* but preserve order?
     // Actually, let's do it simply first: fetch this level, and map to nodes.
@@ -63,5 +74,23 @@ actor CommentLoader {
       let nodeMap = Dictionary(uniqueKeysWithValues: results.map { ($0.id, $0) })
       return ids.compactMap { nodeMap[$0] }
     }
+  }
+
+  private func fetchItems(ids: [Int]) async throws -> [HNItem] {
+    var seenMissingIds: Set<Int> = []
+    let missingIds = ids.filter { id in
+      guard !cache.keys.contains(id), !seenMissingIds.contains(id) else {
+        return false
+      }
+      seenMissingIds.insert(id)
+      return true
+    }
+    if !missingIds.isEmpty {
+      let fetchedItems = try await client.fetchItems(ids: missingIds)
+      for item in fetchedItems {
+        cache[item.id] = item
+      }
+    }
+    return ids.compactMap { cache[$0] }
   }
 }
