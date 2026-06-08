@@ -24,9 +24,9 @@ Last verified: 2026-06-08, 20 unit tests passed.
 
 ## Smoke QA
 
-- [ ] App installs and launches on iPhone 17 Pro Simulator.
-- [ ] First-launch onboarding appears or, after completion, the Hacker News feed appears.
-- [ ] Feed loads top stories.
+- [x] App installs and launches on iPhone 17 Pro Max Simulator.
+- [x] First-launch onboarding appears or, after completion, the Hacker News feed appears.
+- [x] Feed loads top stories.
 - [ ] Story detail opens from the feed.
 - [ ] Reader mode shows parsed article content or falls back to web view cleanly.
 - [ ] Comments tab loads and comment collapse/expand works.
@@ -34,6 +34,8 @@ Last verified: 2026-06-08, 20 unit tests passed.
 - [ ] Summary sheet opens without an API key and shows a useful configuration error.
 - [ ] Markdown export share sheet opens from story detail.
 - [ ] Settings opens and displays AI provider, language, cache, and app version sections.
+
+Smoke note: on 2026-06-08, installed and launched the Debug app on iPhone 17 Pro Max Simulator (`CBA84A70-F9C4-4945-87D6-9B8AE5DF0B14`). The first-launch onboarding screen rendered correctly. After presetting `has_completed_onboarding`, the Hacker News feed loaded top stories. Deeper interaction checks remain manual until UI tapping automation is available.
 
 ## Known Limits Before Release
 
