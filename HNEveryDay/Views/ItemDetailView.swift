@@ -10,6 +10,7 @@ import SwiftUI
 struct ItemDetailView: View {
   let item: HNItem
 
+  @State private var hydratedItem: HNItem?
   @State private var selectedMode = 0  // 0 = Article, 1 = Comments
   @State private var comments: [CommentNode] = []
   @State private var flattenedComments: [CommentNode] = []
@@ -30,6 +31,10 @@ struct ItemDetailView: View {
   @State private var exportData: ExportData?
   @State private var summaryTextForExport: String?
 
+  private var currentItem: HNItem {
+    hydratedItem ?? item
+  }
+
   var body: some View {
     VStack(spacing: 0) {
       // MARK: - Picker
@@ -46,7 +51,7 @@ struct ItemDetailView: View {
       TabView(selection: $selectedMode) {
         // MODIFIED: Article View with Smart Reader
         Group {
-          if let url = item.urlObj {
+          if let url = currentItem.urlObj {
             if showReaderMode, let article = parsedArticle {
               ReaderView(article: article)
                 .transition(.opacity)
@@ -68,9 +73,9 @@ struct ItemDetailView: View {
               WebView(url: url)
                 .transition(.opacity)
             }
-          } else if item.text != nil {
+          } else if currentItem.text != nil {
             ScrollView {
-              Text(HTMLHelper.parse(item.text ?? ""))
+              Text(HTMLHelper.parse(currentItem.text ?? ""))
                 .padding()
             }
           } else {
@@ -89,12 +94,12 @@ struct ItemDetailView: View {
             List {
               // Header Info
               VStack(alignment: .leading, spacing: 8) {
-                Text(item.title ?? "")
+                Text(currentItem.title ?? "")
                   .font(.headline)
                 HStack {
-                  Text("\(item.score ?? 0) points")
-                  Text("by \(item.by ?? "")")  // 'by' is hard to localize elegantly in concatenation, will leave as is or use a format string
-                  Text(item.time.shortTimeAgo)
+                  Text("\(currentItem.score ?? 0) points")
+                  Text("by \(currentItem.by ?? "")")  // 'by' is hard to localize elegantly in concatenation, will leave as is or use a format string
+                  Text(currentItem.time.shortTimeAgo)
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -120,7 +125,7 @@ struct ItemDetailView: View {
     .navigationBarTitleDisplayMode(.inline)
     .toolbar {
       // Reader Toggle
-      if selectedMode == 0 && item.urlObj != nil {
+      if selectedMode == 0 && currentItem.urlObj != nil {
         ToolbarItem(placement: .topBarTrailing) {
           Button {
             withAnimation {
@@ -157,7 +162,7 @@ struct ItemDetailView: View {
     }
     .sheet(isPresented: $showSummary) {
       SummaryView(
-        item: item, comments: flattenedComments, article: parsedArticle,
+        item: currentItem, comments: flattenedComments, article: parsedArticle,
         initialSummary: summaryTextForExport,
         onSummaryGenerated: { summary in
           self.summaryTextForExport = summary
@@ -166,6 +171,7 @@ struct ItemDetailView: View {
       .presentationDetents([.medium, .large])
     }
     .task {
+      await hydrateItemIfNeeded()
       // Parallel load: Comments AND Reader Parsing
       await withTaskGroup(of: Void.self) { group in
         group.addTask { await loadComments() }
@@ -174,15 +180,34 @@ struct ItemDetailView: View {
     }
     // Force comments mode if no URL
     .onAppear {
-      DataService.shared.markAsRead(item: item)
-      summaryTextForExport = DataService.shared.fetchCachedStory(id: item.id)?.summary
-      if item.url == nil {
+      DataService.shared.markAsRead(item: currentItem)
+      summaryTextForExport = DataService.shared.fetchCachedStory(id: currentItem.id)?.summary
+      if currentItem.url == nil {
         selectedMode = 1
       }
     }
   }
 
+  private func hydrateItemIfNeeded() async {
+    guard hydratedItem == nil else { return }
+    guard item.kids == nil || item.score == nil || item.by == nil else { return }
+
+    do {
+      let freshItem = try await HNClient.shared.fetchItem(id: item.id)
+      await MainActor.run {
+        self.hydratedItem = freshItem
+        DataService.shared.markAsRead(item: freshItem)
+        if freshItem.url == nil {
+          self.selectedMode = 1
+        }
+      }
+    } catch {
+      print("Failed to hydrate story: \(error)")
+    }
+  }
+
   private func loadArticleContent() async {
+    let item = currentItem
     guard let url = item.urlObj else { return }
     guard parsedArticle == nil else { return }
 
@@ -232,7 +257,7 @@ struct ItemDetailView: View {
 
   private func generateExport() {
     let md = MarkdownGenerator.generate(
-      item: item,
+      item: currentItem,
       summary: summaryTextForExport,
       article: parsedArticle,
       comments: comments
@@ -254,7 +279,7 @@ struct ItemDetailView: View {
   }
 
   private func loadComments() async {
-    guard let kids = item.kids, !kids.isEmpty else { return }
+    guard let kids = currentItem.kids, !kids.isEmpty else { return }
     guard comments.isEmpty else { return }  // already loaded
 
     await MainActor.run { isLoadingComments = true }
