@@ -61,11 +61,11 @@
 
 ## 🛠 技术栈
 
-- **语言**：Swift 6
-- **UI 框架**：SwiftUI (iOS 17+)
+- **语言**：Swift 5 语言模式
+- **UI 框架**：SwiftUI（当前 App 部署目标：iOS 18.6）
 - **持久化**：**SwiftData** + 优化的"读穿"缓存策略
-- **并发**：Swift 6 `async/await`，`Actor` 保证线程安全
-- **状态管理**：MVVM + Observation 框架 (`@Observable`)
+- **并发**：Swift `async/await`，`Actor` 保证线程安全
+- **状态管理**：MVVM + `ObservableObject` 与 SwiftUI 视图状态
 - **网络**：基于 `URLSession` 的自定义封装，对接 Hacker News Firebase API
 
 ---
@@ -88,8 +88,20 @@
    ```bash
    git clone https://github.com/corlin/HNEveryDay.git
    ```
-2. 使用 Xcode 15+ 打开 `HNEveryDay.xcodeproj`
+2. 使用支持当前 iOS 部署目标的新版 Xcode 打开 `HNEveryDay.xcodeproj`。本仓库当前已用 Xcode 26.5 验证
 3. 在 iPhone 或模拟器上构建运行
+
+---
+
+## ✅ 测试
+
+使用可用的 iOS 模拟器运行单元测试：
+
+```bash
+xcodebuild test -project HNEveryDay.xcodeproj -scheme HNEveryDay -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO
+```
+
+当前测试覆盖 Markdown 导出、HTML 清理、AI 摘要 prompt 拼装和评论树展平逻辑。
 
 ---
 

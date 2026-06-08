@@ -72,11 +72,11 @@ Get the "Hacker Perspective" in seconds.
 
 ## 🛠 Tech Stack
 
-- **Language**: Swift 6
-- **UI Framework**: SwiftUI (iOS 17+)
+- **Language**: Swift 5 language mode
+- **UI Framework**: SwiftUI (current app deployment target: iOS 18.6)
 - **Persistence**: **SwiftData** with optimized "Read-Through" caching.
-- **Concurrency**: Swift 6 `async/await`, `Actors` for thread-safe data fetching.
-- **State Management**: MVVM + Observation Framework (`@Observable`).
+- **Concurrency**: Swift `async/await`, `Actors` for thread-safe data fetching.
+- **State Management**: MVVM with `ObservableObject` and SwiftUI view state.
 - **Networking**: Custom `URLSession` wrapper interacting with Hacker News Firebase API.
 
 ---
@@ -99,8 +99,20 @@ Get the "Hacker Perspective" in seconds.
    ```bash
    git clone https://github.com/corlin/HNEveryDay.git
    ```
-2. Open `HNEveryDay.xcodeproj` in Xcode 15+.
+2. Open `HNEveryDay.xcodeproj` in a recent Xcode that supports the configured iOS deployment target. This repo is currently verified with Xcode 26.5.
 3. Build and Run on your iPhone or Simulator.
+
+---
+
+## ✅ Testing
+
+Run the unit test target with an available iOS Simulator:
+
+```bash
+xcodebuild test -project HNEveryDay.xcodeproj -scheme HNEveryDay -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO
+```
+
+Current coverage focuses on Markdown export, HTML cleanup, AI summary prompt construction, and comment tree flattening.
 
 ---
 
