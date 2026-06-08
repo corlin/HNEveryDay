@@ -47,76 +47,14 @@ final class AIService: Sendable {
     }
 
     // Construct Prompt
-    var prompt = "You are a tech-savvy summarizer for Hacker News users. \n"
-    prompt += "Story Title: \(title)\n"
-    if let url = url {
-      prompt += "URL: \(url)\n"
-    }
-
-    // Localization Check - Respect user preference
     let preferredLang = UserDefaults.standard.string(forKey: "preferred_language") ?? "system"
-    let isChinese: Bool
-    if preferredLang == "system" {
-      isChinese = Locale.current.identifier.lowercased().starts(with: "zh")
-    } else {
-      isChinese = preferredLang == "zh-Hans"
-    }
-    let summaryFormat: String
-    if isChinese {
-      summaryFormat = """
-        ## 📝 文章核心
-        [用 2-3 句话总结文章核心价值]
-
-        ## 💬 讨论焦点
-        - **[要点 1]**: [简要说明]
-        - **[要点 2]**: [简要说明]
-        - **[要点 3]**: [简要说明]
-
-        ## 🎯 结论
-        [用 1-2 句话给出综合判断]
-        """
-    } else {
-      summaryFormat = """
-        ## 📝 Core Idea
-        [2-3 sentences summarizing the article's core value proposition]
-
-        ## 💬 Discussion Focus
-        - **[Key Point 1]**: [Brief explanation]
-        - **[Key Point 2]**: [Brief explanation]
-        - **[Key Point 3]**: [Brief explanation]
-
-        ## 🎯 Takeaway
-        [1-2 sentences with your synthesis]
-        """
-    }
-    let langInstruction =
-      isChinese
-      ? "Answer in Simplified Chinese (简体中文)."
-      : "Answer in English."
-
-    if let content = articleContent, !content.isEmpty {
-      prompt += "\nArticle Content (Excerpt):\n"
-      // Limit article content to avoid context overflow (approx 1000 chars or reasonable limit)
-      prompt += "\(content.prefix(2000))...\n"
-    }
-
-    prompt += "\nTop Comments:\n"
-    for comment in comments.prefix(20) {  // Limit to top 20 comments to fit context window
-      // Strip excessive newlines and HTML tags roughly
-      let cleanComment = comment.replacingOccurrences(
-        of: "<[^>]+>", with: "", options: .regularExpression)
-      prompt += "- \(cleanComment.prefix(300))...\n"  // Truncate individual comments
-    }
-
-    prompt +=
-      """
-
-      Task: Provide a well-structured summary using the following format:
-
-      \(summaryFormat)
-
-      Keep it concise (under 250 words). Use bullet points for clarity. \(langInstruction)
-      """
+    let prompt = Self.buildSummaryPrompt(
+      title: title,
+      url: url,
+      articleContent: articleContent,
+      comments: comments,
+      preferredLanguage: preferredLang
+    )
 
     // Build Request
     let requestBody = ChatRequest(
@@ -193,5 +131,93 @@ final class AIService: Sendable {
       ?? NSError(
         domain: "AIService", code: 500,
         userInfo: [NSLocalizedDescriptionKey: "Failed after 3 retries."])
+  }
+
+  static func buildSummaryPrompt(
+    title: String,
+    url: String?,
+    articleContent: String?,
+    comments: [String],
+    preferredLanguage: String,
+    localeIdentifier: String = Locale.current.identifier
+  ) -> String {
+    var prompt = "You are a tech-savvy summarizer for Hacker News users. \n"
+    prompt += "Story Title: \(title)\n"
+    if let url = url {
+      prompt += "URL: \(url)\n"
+    }
+
+    let isChinese = shouldUseChineseSummary(
+      preferredLanguage: preferredLanguage,
+      localeIdentifier: localeIdentifier
+    )
+    let summaryFormat: String
+    if isChinese {
+      summaryFormat = """
+        ## 📝 文章核心
+        [用 2-3 句话总结文章核心价值]
+
+        ## 💬 讨论焦点
+        - **[要点 1]**: [简要说明]
+        - **[要点 2]**: [简要说明]
+        - **[要点 3]**: [简要说明]
+
+        ## 🎯 结论
+        [用 1-2 句话给出综合判断]
+        """
+    } else {
+      summaryFormat = """
+        ## 📝 Core Idea
+        [2-3 sentences summarizing the article's core value proposition]
+
+        ## 💬 Discussion Focus
+        - **[Key Point 1]**: [Brief explanation]
+        - **[Key Point 2]**: [Brief explanation]
+        - **[Key Point 3]**: [Brief explanation]
+
+        ## 🎯 Takeaway
+        [1-2 sentences with your synthesis]
+        """
+    }
+    let langInstruction =
+      isChinese
+      ? "Answer in Simplified Chinese (简体中文)."
+      : "Answer in English."
+
+    if let content = articleContent, !content.isEmpty {
+      prompt += "\nArticle Content (Excerpt):\n"
+      // Limit article content to avoid context overflow (approx 1000 chars or reasonable limit)
+      prompt += "\(content.prefix(2000))...\n"
+    }
+
+    prompt += "\nTop Comments:\n"
+    for comment in comments.prefix(20) {  // Limit to top 20 comments to fit context window
+      // Strip excessive newlines and HTML tags roughly
+      let cleanComment = comment.replacingOccurrences(
+        of: "<[^>]+>", with: "", options: .regularExpression)
+      prompt += "- \(cleanComment.prefix(300))...\n"  // Truncate individual comments
+    }
+
+    prompt +=
+      """
+
+      Task: Provide a well-structured summary using the following format:
+
+      \(summaryFormat)
+
+      Keep it concise (under 250 words). Use bullet points for clarity. \(langInstruction)
+      """
+
+    return prompt
+  }
+
+  static func shouldUseChineseSummary(
+    preferredLanguage: String,
+    localeIdentifier: String = Locale.current.identifier
+  ) -> Bool {
+    if preferredLanguage == "system" {
+      return localeIdentifier.lowercased().starts(with: "zh")
+    }
+    return preferredLanguage == "zh-Hans"
   }
 }
