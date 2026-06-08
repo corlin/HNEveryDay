@@ -12,6 +12,7 @@
 
 - [x] Unit tests pass on iPhone 17 Pro Simulator.
 - [x] `git diff --check` passes.
+- [x] Debug build passes on iPhone 17 Pro Simulator after adaptive translation changes.
 - [x] README and CHANGELOG describe the current build and validation setup.
 
 Command:
@@ -29,6 +30,9 @@ Last verified: 2026-06-08, 20 unit tests passed.
 - [x] Feed loads top stories.
 - [ ] Story detail opens from the feed.
 - [ ] Reader mode shows parsed article content or falls back to web view cleanly.
+- [ ] Article translation can be enabled from Settings and toggled in Reader mode.
+- [ ] On-demand translation shows translated title/body and caches the result.
+- [ ] Auto translation only runs when source language differs from the preferred reading language.
 - [ ] Comments tab loads and comment collapse/expand works.
 - [ ] Save/unsave story updates the saved filter.
 - [ ] Summary sheet opens without an API key and shows a useful configuration error.

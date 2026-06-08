@@ -79,4 +79,33 @@ final class AIServicePromptTests: XCTestCase {
     XCTAssertTrue(prompt.contains("- Comment 20..."))
     XCTAssertFalse(prompt.contains("- Comment 21..."))
   }
+
+  func testArticleTranslationPromptRequestsJsonOnly() {
+    let prompt = AIService.buildArticleTranslationPrompt(
+      title: "A useful story",
+      articleText: "This article explains a technical idea.",
+      targetLanguage: "zh-Hans"
+    )
+
+    XCTAssertTrue(prompt.contains("Target language: Simplified Chinese"))
+    XCTAssertTrue(prompt.contains("\"translated_title\""))
+    XCTAssertTrue(prompt.contains("\"translated_markdown\""))
+    XCTAssertTrue(prompt.contains("Return JSON only"))
+  }
+
+  func testDecodeArticleTranslationHandlesJsonFence() throws {
+    let response = """
+      ```json
+      {
+        "translated_title": "Translated title",
+        "translated_markdown": "Translated body"
+      }
+      ```
+      """
+
+    let translation = try AIService.decodeArticleTranslation(response)
+
+    XCTAssertEqual(translation.title, "Translated title")
+    XCTAssertEqual(translation.markdown, "Translated body")
+  }
 }

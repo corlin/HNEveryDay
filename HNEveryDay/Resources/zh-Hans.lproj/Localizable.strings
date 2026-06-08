@@ -62,8 +62,19 @@
 "AI Response Language" = "AI 回复语言";
 "System Default" = "跟随系统";
 "English" = "English";
+"Article Translation" = "文章翻译";
+"Off" = "关闭";
+"On Demand" = "按需翻译";
+"Auto When Needed" = "需要时自动翻译";
 "Keep History: %lld Days" = "历史保留: %lld 天";
 "Controls how long read articles are cached locally." = "控制已读文章在本地缓存的时长。";
+"Translations use your configured AI provider and are cached locally with read articles." = "翻译会使用您配置的 AI 服务商，并随已读文章缓存在本地。";
+"Translating article..." = "正在翻译文章...";
+"Unknown Source" = "未知来源";
+"Show Web Article" = "显示网页原文";
+"Show Reader" = "显示阅读器";
+"Show Original Article" = "显示原文";
+"Translate Article" = "翻译文章";
 
 /* About */
 "About" = "关于";

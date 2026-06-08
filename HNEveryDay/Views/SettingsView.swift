@@ -15,6 +15,7 @@ struct SettingsView: View {
 
   // General Settings
   @AppStorage("preferred_language") private var preferredLanguage: String = "system"
+  @AppStorage("translation_mode") private var translationMode: String = TranslationMode.off.rawValue
   @AppStorage("cache_retention_days") private var cacheRetentionDays: Int = 30
 
   @Environment(\.dismiss) private var dismiss
@@ -155,13 +156,22 @@ struct SettingsView: View {
             Text("简体中文").tag("zh-Hans")
           }
 
+          Picker("Article Translation", selection: $translationMode) {
+            Text("Off", comment: "Disable article translation").tag(TranslationMode.off.rawValue)
+            Text("On Demand", comment: "Translate when requested").tag(TranslationMode.onDemand.rawValue)
+            Text("Auto When Needed", comment: "Translate when article language differs").tag(
+              TranslationMode.auto.rawValue)
+          }
+
           Stepper(
             "Keep History: \(cacheRetentionDays) Days", value: $cacheRetentionDays, in: 7...90,
             step: 7)
         } header: {
           Text("General", comment: "Section header")
         } footer: {
-          Text("Controls how long read articles are cached locally.", comment: "Cache explanation")
+          Text(
+            "Translations use your configured AI provider and are cached locally with read articles.",
+            comment: "Translation explanation")
         }
 
         // MARK: - About

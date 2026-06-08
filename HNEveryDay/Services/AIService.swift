@@ -29,6 +29,16 @@ final class AIService: Sendable {
     let choices: [Choice]
   }
 
+  struct ArticleTranslation: Codable, Equatable {
+    let title: String
+    let markdown: String
+
+    enum CodingKeys: String, CodingKey {
+      case title = "translated_title"
+      case markdown = "translated_markdown"
+    }
+  }
+
   // Core Logic
   func summarize(title: String, url: String?, articleContent: String?, comments: [String])
     async throws -> String
@@ -56,14 +66,65 @@ final class AIService: Sendable {
       preferredLanguage: preferredLang
     )
 
-    // Build Request
+    return try await sendChatCompletion(
+      apiKey: apiKey,
+      baseUrl: baseUrl,
+      model: model,
+      systemMessage: "You are a helpful assistant.",
+      userPrompt: prompt,
+      temperature: 0.7
+    )
+  }
+
+  func translateArticle(
+    title: String,
+    articleText: String,
+    targetLanguage: String
+  ) async throws -> ArticleTranslation {
+    let apiKey = KeychainHelper.read(key: "ai_api_key") ?? ""
+    let baseUrl = UserDefaults.standard.string(forKey: "ai_base_url") ?? "https://api.openai.com/v1"
+    let model = UserDefaults.standard.string(forKey: "ai_model") ?? "gpt-3.5-turbo"
+
+    guard !apiKey.isEmpty else {
+      throw NSError(
+        domain: "AIService", code: 401,
+        userInfo: [
+          NSLocalizedDescriptionKey: "API Key is missing. Please configure it in Settings."
+        ])
+    }
+
+    let prompt = Self.buildArticleTranslationPrompt(
+      title: title,
+      articleText: articleText,
+      targetLanguage: targetLanguage
+    )
+    let response = try await sendChatCompletion(
+      apiKey: apiKey,
+      baseUrl: baseUrl,
+      model: model,
+      systemMessage: "You translate technical articles faithfully for Hacker News readers.",
+      userPrompt: prompt,
+      temperature: 0.2
+    )
+
+    return try Self.decodeArticleTranslation(response)
+  }
+
+  private func sendChatCompletion(
+    apiKey: String,
+    baseUrl: String,
+    model: String,
+    systemMessage: String,
+    userPrompt: String,
+    temperature: Double
+  ) async throws -> String {
     let requestBody = ChatRequest(
       model: model,
       messages: [
-        ChatMessage(role: "system", content: "You are a helpful assistant."),
-        ChatMessage(role: "user", content: prompt),
+        ChatMessage(role: "system", content: systemMessage),
+        ChatMessage(role: "user", content: userPrompt),
       ],
-      temperature: 0.7
+      temperature: temperature
     )
 
     let endpoint =
@@ -131,6 +192,63 @@ final class AIService: Sendable {
       ?? NSError(
         domain: "AIService", code: 500,
         userInfo: [NSLocalizedDescriptionKey: "Failed after 3 retries."])
+  }
+
+  static func buildArticleTranslationPrompt(
+    title: String,
+    articleText: String,
+    targetLanguage: String
+  ) -> String {
+    let languageName = ReadingLanguage.displayName(for: targetLanguage)
+    let clippedArticle = String(articleText.prefix(8_000))
+
+    return """
+      Translate this Hacker News article for a technical reader.
+
+      Target language: \(languageName)
+
+      Rules:
+      - Preserve the author's meaning and uncertainty. Do not add new opinions.
+      - Keep product names, code, API names, commands, URLs, and library names unchanged.
+      - Use natural technical wording in the target language.
+      - Convert the article body to clean Markdown.
+      - Return JSON only, with no code fence and no extra commentary.
+
+      JSON schema:
+      {
+        "translated_title": "translated title",
+        "translated_markdown": "translated article body in Markdown"
+      }
+
+      Original title:
+      \(title)
+
+      Original article excerpt:
+      \(clippedArticle)
+      """
+  }
+
+  static func decodeArticleTranslation(_ response: String) throws -> ArticleTranslation {
+    let trimmed = response.trimmingCharacters(in: .whitespacesAndNewlines)
+    let jsonText: String
+
+    if trimmed.hasPrefix("```") {
+      jsonText =
+        trimmed
+        .replacingOccurrences(of: "```json", with: "")
+        .replacingOccurrences(of: "```JSON", with: "")
+        .replacingOccurrences(of: "```", with: "")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+    } else if let start = trimmed.firstIndex(of: "{"),
+      let end = trimmed.lastIndex(of: "}")
+    {
+      jsonText = String(trimmed[start...end])
+    } else {
+      jsonText = trimmed
+    }
+
+    let data = Data(jsonText.utf8)
+    return try JSONDecoder().decode(ArticleTranslation.self, from: data)
   }
 
   static func buildSummaryPrompt(

@@ -11,6 +11,8 @@ struct ItemDetailView: View {
   let item: HNItem
 
   @State private var hydratedItem: HNItem?
+  @AppStorage("preferred_language") private var preferredLanguage: String = "system"
+  @AppStorage("translation_mode") private var translationModeRaw: String = TranslationMode.off.rawValue
   @State private var selectedMode = 0  // 0 = Article, 1 = Comments
   @State private var comments: [CommentNode] = []
   @State private var flattenedComments: [CommentNode] = []
@@ -22,6 +24,11 @@ struct ItemDetailView: View {
   @State private var parsedArticle: ParsedArticle?
   @State private var isParsingArticle = false
   @State private var showReaderMode = true  // Default to true
+  @State private var translatedArticleTitle: String?
+  @State private var translatedArticleMarkdown: String?
+  @State private var isTranslatingArticle = false
+  @State private var translationError: String?
+  @State private var showTranslatedArticle = false
 
   // Export State
   struct ExportData: Identifiable {
@@ -33,6 +40,14 @@ struct ItemDetailView: View {
 
   private var currentItem: HNItem {
     hydratedItem ?? item
+  }
+
+  private var translationMode: TranslationMode {
+    TranslationMode(rawValue: translationModeRaw) ?? .off
+  }
+
+  private var targetLanguage: String {
+    ReadingLanguage.resolvedCode(preferredLanguage: preferredLanguage)
   }
 
   var body: some View {
@@ -53,8 +68,35 @@ struct ItemDetailView: View {
         Group {
           if let url = currentItem.urlObj {
             if showReaderMode, let article = parsedArticle {
-              ReaderView(article: article)
-                .transition(.opacity)
+              VStack(spacing: 0) {
+                if isTranslatingArticle {
+                  ProgressView("Translating article...")
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity)
+                    .background(Color(.secondarySystemBackground))
+                } else if let translationError {
+                  Text(translationError)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(.secondarySystemBackground))
+                }
+
+                if showTranslatedArticle, let translatedArticleMarkdown {
+                  TranslatedReaderView(
+                    title: translatedArticleTitle ?? article.title ?? currentItem.title ?? "Untitled",
+                    byline: article.byline ?? article.siteName,
+                    markdown: translatedArticleMarkdown,
+                    targetLanguage: targetLanguage
+                  )
+                  .transition(.opacity)
+                } else {
+                  ReaderView(article: article)
+                    .transition(.opacity)
+                }
+              }
             } else if showReaderMode && isParsingArticle {
               VStack {
                 ProgressView {
@@ -130,11 +172,28 @@ struct ItemDetailView: View {
           Button {
             withAnimation {
               showReaderMode.toggle()
+              if !showReaderMode {
+                showTranslatedArticle = false
+              }
             }
           } label: {
             Image(systemName: showReaderMode ? "doc.plaintext.fill" : "globe")
               .foregroundStyle(showReaderMode ? .orange : .primary)
           }
+          .accessibilityLabel(showReaderMode ? "Show Web Article" : "Show Reader")
+        }
+      }
+
+      if selectedMode == 0 && showReaderMode && parsedArticle != nil && translationMode != .off {
+        ToolbarItem(placement: .topBarTrailing) {
+          Button {
+            Task { await toggleArticleTranslation() }
+          } label: {
+            Image(systemName: showTranslatedArticle ? "doc.plaintext" : "translate")
+              .foregroundStyle(showTranslatedArticle ? .orange : .primary)
+          }
+          .disabled(isTranslatingArticle)
+          .accessibilityLabel(showTranslatedArticle ? "Show Original Article" : "Translate Article")
         }
       }
 
@@ -214,16 +273,18 @@ struct ItemDetailView: View {
     if let cachedContent = await MainActor.run(body: {
       DataService.shared.fetchCachedStory(id: item.id)?.contentHTML
     }) {
+      let article = ParsedArticle(
+        title: item.title,
+        byline: item.by,
+        contentHTML: cachedContent,
+        textContent: HTMLHelper.stripTags(cachedContent),
+        excerpt: nil,
+        siteName: url.host
+      )
       await MainActor.run {
-        self.parsedArticle = ParsedArticle(
-          title: item.title,
-          byline: item.by,
-          contentHTML: cachedContent,
-          textContent: HTMLHelper.stripTags(cachedContent),
-          excerpt: nil,
-          siteName: url.host
-        )
+        self.parsedArticle = article
       }
+      await prepareArticleTranslationIfNeeded(for: article, item: item)
       return
     }
 
@@ -243,6 +304,7 @@ struct ItemDetailView: View {
           )
         }
       }
+      await prepareArticleTranslationIfNeeded(for: article, item: item)
     } catch {
       print("Reader Parsing failed: \(error). Falling back to Web.")
       await MainActor.run {
@@ -252,6 +314,89 @@ struct ItemDetailView: View {
     }
     await MainActor.run {
       self.isParsingArticle = false
+    }
+  }
+
+  private func prepareArticleTranslationIfNeeded(for article: ParsedArticle, item: HNItem) async {
+    guard translationMode != .off else { return }
+    let targetLanguage = targetLanguage
+
+    if let cached = await MainActor.run(body: {
+      DataService.shared.fetchArticleTranslation(id: item.id, targetLanguage: targetLanguage)
+    }) {
+      await MainActor.run {
+        self.translatedArticleTitle = cached.title
+        self.translatedArticleMarkdown = cached.markdown
+        if translationMode == .auto {
+          self.showTranslatedArticle = true
+        }
+      }
+      return
+    }
+
+    guard translationMode == .auto else { return }
+    let sourceText = article.textContent ?? HTMLHelper.stripTags(article.contentHTML ?? "")
+    guard ReadingLanguage.shouldTranslate(sourceText: sourceText, targetLanguage: targetLanguage) else {
+      return
+    }
+    await generateArticleTranslation(for: article, item: item)
+  }
+
+  private func toggleArticleTranslation() async {
+    if showTranslatedArticle {
+      await MainActor.run {
+        withAnimation { showTranslatedArticle = false }
+      }
+      return
+    }
+
+    if translatedArticleMarkdown != nil {
+      await MainActor.run {
+        withAnimation { showTranslatedArticle = true }
+      }
+      return
+    }
+
+    guard let article = parsedArticle else { return }
+    await generateArticleTranslation(for: article, item: currentItem)
+  }
+
+  private func generateArticleTranslation(for article: ParsedArticle, item: HNItem) async {
+    let articleText = article.textContent ?? HTMLHelper.stripTags(article.contentHTML ?? "")
+    guard !articleText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+
+    await MainActor.run {
+      isTranslatingArticle = true
+      translationError = nil
+    }
+
+    do {
+      let result = try await AIService.shared.translateArticle(
+        title: article.title ?? item.title ?? "Untitled",
+        articleText: articleText,
+        targetLanguage: targetLanguage
+      )
+      await MainActor.run {
+        translatedArticleTitle = result.title
+        translatedArticleMarkdown = result.markdown
+        showTranslatedArticle = true
+        DataService.shared.saveArticleTranslation(
+          id: item.id,
+          title: item.title ?? article.title ?? "Untitled",
+          url: item.url,
+          targetLanguage: targetLanguage,
+          translatedTitle: result.title,
+          translatedContentMarkdown: result.markdown
+        )
+      }
+    } catch {
+      await MainActor.run {
+        translationError = error.localizedDescription
+      }
+    }
+
+    await MainActor.run {
+      isTranslatingArticle = false
     }
   }
 
