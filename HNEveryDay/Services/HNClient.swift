@@ -7,22 +7,59 @@
 
 import Foundation
 
-enum HNClientError: Error {
+enum HNClientError: Error, LocalizedError {
   case invalidURL
   case networkError(Error)
+  case invalidResponse
+  case httpStatus(Int)
+  case emptyResponse
   case decodingError(Error)
   case unknown
+
+  var errorDescription: String? {
+    switch self {
+    case .invalidURL:
+      return "Invalid Hacker News API URL."
+    case .networkError(let error):
+      return "Network error: \(error.localizedDescription)"
+    case .invalidResponse:
+      return "Invalid response from Hacker News API."
+    case .httpStatus(let statusCode):
+      return "Hacker News API returned HTTP \(statusCode)."
+    case .emptyResponse:
+      return "Hacker News API returned an empty response."
+    case .decodingError(let error):
+      return "Failed to decode Hacker News API response: \(error.localizedDescription)"
+    case .unknown:
+      return "Unknown Hacker News API error."
+    }
+  }
 }
+
+protocol HNClientSession: Sendable {
+  func data(from url: URL) async throws -> (Data, URLResponse)
+}
+
+extension URLSession: HNClientSession {}
 
 final class HNClient: Sendable {
   static let shared = HNClient()
-  private let baseURL = URL(string: "https://hacker-news.firebaseio.com/v0")!
+  private let baseURL: URL
+  private let session: any HNClientSession
 
   private let jsonDecoder: JSONDecoder = {
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .secondsSince1970
     return decoder
   }()
+
+  init(
+    baseURL: URL = URL(string: "https://hacker-news.firebaseio.com/v0")!,
+    session: any HNClientSession = URLSession.shared
+  ) {
+    self.baseURL = baseURL
+    self.session = session
+  }
 
   // MARK: - Core Fetching
 
@@ -82,7 +119,32 @@ final class HNClient: Sendable {
   // MARK: - Internal
 
   private func fetch<T: Decodable>(url: URL) async throws -> T {
-    let (data, _) = try await URLSession.shared.data(from: url)
+    let data: Data
+    let response: URLResponse
+    do {
+      (data, response) = try await session.data(from: url)
+    } catch {
+      throw HNClientError.networkError(error)
+    }
+
+    guard let httpResponse = response as? HTTPURLResponse else {
+      throw HNClientError.invalidResponse
+    }
+
+    guard (200...299).contains(httpResponse.statusCode) else {
+      throw HNClientError.httpStatus(httpResponse.statusCode)
+    }
+
+    guard !data.isEmpty else {
+      throw HNClientError.emptyResponse
+    }
+
+    if String(data: data, encoding: .utf8)?
+      .trimmingCharacters(in: .whitespacesAndNewlines) == "null"
+    {
+      throw HNClientError.emptyResponse
+    }
+
     do {
       return try jsonDecoder.decode(T.self, from: data)
     } catch {
