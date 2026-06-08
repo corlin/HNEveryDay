@@ -103,6 +103,7 @@ struct FeedView: View {
           } label: {
             Image(systemName: "gearshape")
           }
+          .accessibilityLabel("Settings")
         }
 
         ToolbarItem(placement: .topBarTrailing) {
@@ -140,6 +141,7 @@ struct FeedView: View {
               "Filter",
               systemImage: showingSavedOnly ? "bookmark.fill" : "line.3.horizontal.decrease.circle")
           }
+          .accessibilityLabel("Filter")
         }
       }
       .sheet(isPresented: $showSettings) {
