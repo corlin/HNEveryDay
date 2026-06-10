@@ -11,6 +11,7 @@
 - Centralized comment tree flattening and improved collapsed-thread reply counts.
 - Added an adaptive article translation foundation: settings can disable translation, translate on demand, or auto-translate Reader content when the source language differs from the preferred reading language.
 - Added automatic feed title translation in Auto mode, with visible-row translation, original-title fallback, and cached translated titles.
+- Batched visible feed title translations to improve throughput, share prompt overhead, and reduce per-title token/network cost.
 - Cached translated article title/body locally and added a translated Reader view backed by OpenAI-compatible providers.
 - Switched the first-run AI defaults to DeepSeek with `deepseek-v4-flash` while keeping API keys user-supplied and stored only in Keychain.
 - Expanded AI response and translation language options beyond English and Simplified Chinese, including Traditional Chinese, Japanese, Korean, Spanish, French, German, Portuguese, and Russian.

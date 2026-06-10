@@ -39,6 +39,25 @@ final class AIService: Sendable {
     }
   }
 
+  struct TitleTranslationInput: Codable, Equatable {
+    let id: Int
+    let title: String
+  }
+
+  struct TitleTranslationBatchResponse: Codable, Equatable {
+    struct Translation: Codable, Equatable {
+      let id: Int
+      let title: String
+
+      enum CodingKeys: String, CodingKey {
+        case id
+        case title = "translated_title"
+      }
+    }
+
+    let translations: [Translation]
+  }
+
   // Core Logic
   func summarize(title: String, url: String?, articleContent: String?, comments: [String])
     async throws -> String
@@ -114,6 +133,17 @@ final class AIService: Sendable {
     _ title: String,
     targetLanguage: String
   ) async throws -> String {
+    let translations = try await translateTitles(
+      [TitleTranslationInput(id: 0, title: title)],
+      targetLanguage: targetLanguage
+    )
+    return translations[0] ?? ""
+  }
+
+  func translateTitles(
+    _ titles: [TitleTranslationInput],
+    targetLanguage: String
+  ) async throws -> [Int: String] {
     let apiKey = KeychainHelper.read(key: "ai_api_key") ?? ""
     let baseUrl = UserDefaults.standard.string(forKey: "ai_base_url") ?? AIDefaults.baseURL
     let model = UserDefaults.standard.string(forKey: "ai_model") ?? AIDefaults.model
@@ -131,11 +161,11 @@ final class AIService: Sendable {
       baseUrl: baseUrl,
       model: model,
       systemMessage: "You translate Hacker News story titles faithfully.",
-      userPrompt: Self.buildTitleTranslationPrompt(title: title, targetLanguage: targetLanguage),
+      userPrompt: Self.buildBatchTitleTranslationPrompt(titles: titles, targetLanguage: targetLanguage),
       temperature: 0.1
     )
 
-    return Self.cleanTranslatedTitle(response)
+    return try Self.decodeTitleTranslationBatch(response)
   }
 
   private func sendChatCompletion(
@@ -257,19 +287,39 @@ final class AIService: Sendable {
   }
 
   static func buildTitleTranslationPrompt(title: String, targetLanguage: String) -> String {
+    buildBatchTitleTranslationPrompt(
+      titles: [TitleTranslationInput(id: 0, title: title)],
+      targetLanguage: targetLanguage
+    )
+  }
+
+  static func buildBatchTitleTranslationPrompt(
+    titles: [TitleTranslationInput],
+    targetLanguage: String
+  ) -> String {
     let languageName = ReadingLanguage.displayName(for: targetLanguage)
+    let encodedTitles =
+      (try? String(data: JSONEncoder().encode(titles), encoding: .utf8)) ?? "[]"
 
     return """
-      Translate this Hacker News story title to \(languageName).
+      Translate these Hacker News story titles to \(languageName).
 
       Rules:
-      - Return only the translated title.
+      - Return JSON only, with no code fence and no extra commentary.
       - Preserve product names, project names, code names, API names, and version numbers.
-      - Keep the title concise and natural for technical readers.
-      - Do not add commentary, quotes, bullets, or markdown.
+      - Keep each title concise and natural for technical readers.
+      - Keep every input id unchanged.
+      - Do not add commentary, quotes, bullets, or markdown inside translated titles.
 
-      Title:
-      \(title)
+      JSON schema:
+      {
+        "translations": [
+          { "id": 123, "translated_title": "translated title" }
+        ]
+      }
+
+      Titles:
+      \(encodedTitles)
       """
   }
 
@@ -278,6 +328,34 @@ final class AIService: Sendable {
       .trimmingCharacters(in: .whitespacesAndNewlines)
       .trimmingCharacters(in: CharacterSet(charactersIn: "\"'`"))
       .trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  static func decodeTitleTranslationBatch(_ response: String) throws -> [Int: String] {
+    let trimmed = response.trimmingCharacters(in: .whitespacesAndNewlines)
+    let jsonText: String
+
+    if trimmed.hasPrefix("```") {
+      jsonText =
+        trimmed
+        .replacingOccurrences(of: "```json", with: "")
+        .replacingOccurrences(of: "```JSON", with: "")
+        .replacingOccurrences(of: "```", with: "")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+    } else if let start = trimmed.firstIndex(of: "{"),
+      let end = trimmed.lastIndex(of: "}")
+    {
+      jsonText = String(trimmed[start...end])
+    } else {
+      jsonText = trimmed
+    }
+
+    let data = Data(jsonText.utf8)
+    let decoded = try JSONDecoder().decode(TitleTranslationBatchResponse.self, from: data)
+    return Dictionary(
+      uniqueKeysWithValues: decoded.translations.map {
+        ($0.id, cleanTranslatedTitle($0.title))
+      }
+    )
   }
 
   static func decodeArticleTranslation(_ response: String) throws -> ArticleTranslation {

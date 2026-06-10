@@ -17,6 +17,8 @@ struct FeedView: View {
   @State private var translatedTitles: [Int: String] = [:]
   @State private var translatingTitleIds: Set<Int> = []
   @State private var failedTitleTranslationIds: Set<Int> = []
+  @State private var pendingTitleTranslationItems: [Int: HNItem] = [:]
+  @State private var isFlushingTitleTranslations = false
 
   private var translationMode: TranslationMode {
     TranslationMode(rawValue: translationModeRaw) ?? .off
@@ -25,6 +27,12 @@ struct FeedView: View {
   private var targetLanguage: String {
     ReadingLanguage.resolvedCode(preferredLanguage: preferredLanguage)
   }
+
+  private var titleTranslationScope: String {
+    "\(translationMode.rawValue)-\(targetLanguage)"
+  }
+
+  private let titleTranslationBatchLimit = 8
 
   var body: some View {
     NavigationStack {
@@ -50,7 +58,7 @@ struct FeedView: View {
               }
               .padding(.vertical, 4)
               .task(id: titleTranslationTaskID(for: savedItem)) {
-                await translateTitleIfNeeded(for: savedItem)
+                await queueTitleTranslationIfNeeded(for: savedItem)
               }
               .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                 Button(role: .destructive) {
@@ -73,7 +81,7 @@ struct FeedView: View {
               )
             }
             .task(id: titleTranslationTaskID(for: story)) {
-              await translateTitleIfNeeded(for: story)
+              await queueTitleTranslationIfNeeded(for: story)
             }
             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
               Button {
@@ -161,6 +169,9 @@ struct FeedView: View {
       .sheet(isPresented: $showSettings) {
         SettingsView()
       }
+      .onChange(of: titleTranslationScope) {
+        resetTitleTranslationState()
+      }
     }
     .task {
       // Initial load
@@ -198,10 +209,20 @@ struct FeedView: View {
   }
 
   private func titleTranslationTaskID(for item: HNItem) -> String {
-    "\(item.id)-\(translationMode.rawValue)-\(targetLanguage)"
+    "\(item.id)-\(titleTranslationScope)"
   }
 
-  private func translateTitleIfNeeded(for item: HNItem) async {
+  @MainActor
+  private func resetTitleTranslationState() {
+    translatedTitles.removeAll()
+    translatingTitleIds.removeAll()
+    failedTitleTranslationIds.removeAll()
+    pendingTitleTranslationItems.removeAll()
+    isFlushingTitleTranslations = false
+  }
+
+  @MainActor
+  private func queueTitleTranslationIfNeeded(for item: HNItem) async {
     guard translationMode == .auto else { return }
     guard let title = item.title, !title.isEmpty else { return }
     guard translatedTitles[item.id] == nil else { return }
@@ -217,25 +238,68 @@ struct FeedView: View {
       return
     }
 
+    pendingTitleTranslationItems[item.id] = item
     translatingTitleIds.insert(item.id)
-    defer { translatingTitleIds.remove(item.id) }
+
+    try? await Task.sleep(nanoseconds: 350_000_000)
+    await flushTitleTranslationBatch()
+  }
+
+  @MainActor
+  private func flushTitleTranslationBatch() async {
+    guard !isFlushingTitleTranslations else { return }
+    guard !pendingTitleTranslationItems.isEmpty else { return }
+
+    isFlushingTitleTranslations = true
+    let batch = Array(pendingTitleTranslationItems.values.prefix(titleTranslationBatchLimit))
+    let batchIds = Set(batch.map(\.id))
+    for id in batchIds {
+      pendingTitleTranslationItems.removeValue(forKey: id)
+    }
+
+    defer {
+      for id in batchIds {
+        translatingTitleIds.remove(id)
+      }
+      isFlushingTitleTranslations = false
+    }
+
+    let inputs = batch.compactMap { item -> AIService.TitleTranslationInput? in
+      guard let title = item.title, !title.isEmpty else { return nil }
+      return AIService.TitleTranslationInput(id: item.id, title: title)
+    }
+
+    guard !inputs.isEmpty else { return }
 
     do {
-      let translatedTitle = try await AIService.shared.translateTitle(
-        title,
+      let translations = try await AIService.shared.translateTitles(
+        inputs,
         targetLanguage: targetLanguage
       )
-      guard !translatedTitle.isEmpty else { return }
-      translatedTitles[item.id] = translatedTitle
-      DataService.shared.saveTitleTranslation(
-        id: item.id,
-        title: title,
-        url: item.url,
-        targetLanguage: targetLanguage,
-        translatedTitle: translatedTitle
-      )
+
+      for item in batch {
+        guard let originalTitle = item.title,
+          let translatedTitle = translations[item.id],
+          !translatedTitle.isEmpty
+        else { continue }
+
+        translatedTitles[item.id] = translatedTitle
+        DataService.shared.saveTitleTranslation(
+          id: item.id,
+          title: originalTitle,
+          url: item.url,
+          targetLanguage: targetLanguage,
+          translatedTitle: translatedTitle
+        )
+      }
     } catch {
-      failedTitleTranslationIds.insert(item.id)
+      failedTitleTranslationIds.formUnion(batchIds)
+    }
+
+    if !pendingTitleTranslationItems.isEmpty {
+      Task {
+        await flushTitleTranslationBatch()
+      }
     }
   }
 }

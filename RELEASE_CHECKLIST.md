@@ -32,6 +32,7 @@ Last verified: 2026-06-08, 20 unit tests passed.
 - [ ] Reader mode shows parsed article content or falls back to web view cleanly.
 - [ ] Article translation can be enabled from Settings and toggled in Reader mode.
 - [ ] Feed titles auto-translate in Auto mode and show the original title as secondary text.
+- [ ] Feed title translation batches visible titles and keeps cached/title-fallback behavior.
 - [ ] AI response language picker offers English, Simplified/Traditional Chinese, Japanese, Korean, Spanish, French, German, Portuguese, and Russian.
 - [ ] On-demand translation shows translated title/body and caches the result.
 - [ ] Auto translation only runs when source language differs from the preferred reading language.

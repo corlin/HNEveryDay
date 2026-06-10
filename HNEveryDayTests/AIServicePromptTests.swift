@@ -151,9 +151,42 @@ final class AIServicePromptTests: XCTestCase {
       targetLanguage: "ko"
     )
 
-    XCTAssertTrue(prompt.contains("Return only the translated title."))
+    XCTAssertTrue(prompt.contains("Return JSON only"))
     XCTAssertTrue(prompt.contains("Preserve product names"))
+    XCTAssertTrue(prompt.contains("\"translations\""))
     XCTAssertTrue(prompt.contains("Korean"))
+  }
+
+  func testBatchTitleTranslationPromptIncludesInputIds() {
+    let prompt = AIService.buildBatchTitleTranslationPrompt(
+      titles: [
+        AIService.TitleTranslationInput(id: 1, title: "A useful story"),
+        AIService.TitleTranslationInput(id: 2, title: "Another useful story"),
+      ],
+      targetLanguage: "zh-Hans"
+    )
+
+    XCTAssertTrue(prompt.contains("\"id\":1"))
+    XCTAssertTrue(prompt.contains("\"id\":2"))
+    XCTAssertTrue(prompt.contains("Keep every input id unchanged."))
+  }
+
+  func testDecodeTitleTranslationBatchHandlesJsonFence() throws {
+    let response = """
+      ```json
+      {
+        "translations": [
+          { "id": 1, "translated_title": "第一个标题" },
+          { "id": 2, "translated_title": "`第二个标题`" }
+        ]
+      }
+      ```
+      """
+
+    let translations = try AIService.decodeTitleTranslationBatch(response)
+
+    XCTAssertEqual(translations[1], "第一个标题")
+    XCTAssertEqual(translations[2], "第二个标题")
   }
 
   func testCleanTranslatedTitleRemovesWrappingQuotes() {
