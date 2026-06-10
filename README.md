@@ -53,7 +53,8 @@ Get the "Hacker Perspective" in seconds.
 
 ### 🌏 Globalization (v0.03)
 - **Chinese Support**: Full UI localization for Simplified Chinese (简体中文).
-- **Contextual AI**: The AI automatically detects your language and summarizes English articles *in Chinese* if your system language is set to Chinese.
+- **Multilingual AI Reading**: AI summaries and translations support English, Simplified/Traditional Chinese, Japanese, Korean, Spanish, French, German, Portuguese, and Russian.
+- **Contextual AI**: The AI can follow your system language or an explicit reading-language preference for summaries, title translation, and Reader translation.
 
 ### 🛡️ Robustness (v0.03)
 - **Smart Retries**: AI Service includes exponential backoff retry logic (3x) to handle unstable networks.

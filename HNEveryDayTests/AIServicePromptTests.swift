@@ -61,6 +61,32 @@ final class AIServicePromptTests: XCTestCase {
     )
   }
 
+  func testSystemLanguagePreferenceMapsTraditionalChineseLocale() {
+    XCTAssertEqual(
+      ReadingLanguage.resolvedCode(
+        preferredLanguage: "system",
+        localeIdentifier: "zh-Hant_TW"
+      ),
+      "zh-Hant"
+    )
+  }
+
+  func testPromptSupportsJapanesePreference() {
+    let prompt = AIService.buildSummaryPrompt(
+      title: "A useful story",
+      url: nil,
+      articleContent: nil,
+      comments: [],
+      preferredLanguage: "ja",
+      localeIdentifier: "en_US"
+    )
+
+    XCTAssertTrue(prompt.contains("## 📝 記事の要点"))
+    XCTAssertTrue(prompt.contains("## 💬 議論の焦点"))
+    XCTAssertTrue(prompt.contains("Answer in Japanese"))
+    XCTAssertFalse(prompt.contains("Answer in English."))
+  }
+
   func testPromptLimitsArticleContentAndTopComments() {
     let longArticle = String(repeating: "A", count: 2_010)
     let comments = (1...25).map { "<p>Comment \($0)</p>" }
@@ -93,6 +119,16 @@ final class AIServicePromptTests: XCTestCase {
     XCTAssertTrue(prompt.contains("Return JSON only"))
   }
 
+  func testArticleTranslationPromptUsesExpandedLanguageName() {
+    let prompt = AIService.buildArticleTranslationPrompt(
+      title: "A useful story",
+      articleText: "This article explains a technical idea.",
+      targetLanguage: "pt-BR"
+    )
+
+    XCTAssertTrue(prompt.contains("Target language: Brazilian Portuguese"))
+  }
+
   func testDecodeArticleTranslationHandlesJsonFence() throws {
     let response = """
       ```json
@@ -112,12 +148,12 @@ final class AIServicePromptTests: XCTestCase {
   func testTitleTranslationPromptKeepsResponseMinimal() {
     let prompt = AIService.buildTitleTranslationPrompt(
       title: "Show HN: A tiny SQLite-backed queue for Swift",
-      targetLanguage: "zh-Hans"
+      targetLanguage: "ko"
     )
 
     XCTAssertTrue(prompt.contains("Return only the translated title."))
     XCTAssertTrue(prompt.contains("Preserve product names"))
-    XCTAssertTrue(prompt.contains("Simplified Chinese"))
+    XCTAssertTrue(prompt.contains("Korean"))
   }
 
   func testCleanTranslatedTitleRemovesWrappingQuotes() {

@@ -317,42 +317,13 @@ final class AIService: Sendable {
       prompt += "URL: \(url)\n"
     }
 
-    let isChinese = shouldUseChineseSummary(
+    let targetLanguage = ReadingLanguage.resolvedCode(
       preferredLanguage: preferredLanguage,
       localeIdentifier: localeIdentifier
     )
-    let summaryFormat: String
-    if isChinese {
-      summaryFormat = """
-        ## 📝 文章核心
-        [用 2-3 句话总结文章核心价值]
-
-        ## 💬 讨论焦点
-        - **[要点 1]**: [简要说明]
-        - **[要点 2]**: [简要说明]
-        - **[要点 3]**: [简要说明]
-
-        ## 🎯 结论
-        [用 1-2 句话给出综合判断]
-        """
-    } else {
-      summaryFormat = """
-        ## 📝 Core Idea
-        [2-3 sentences summarizing the article's core value proposition]
-
-        ## 💬 Discussion Focus
-        - **[Key Point 1]**: [Brief explanation]
-        - **[Key Point 2]**: [Brief explanation]
-        - **[Key Point 3]**: [Brief explanation]
-
-        ## 🎯 Takeaway
-        [1-2 sentences with your synthesis]
-        """
-    }
-    let langInstruction =
-      isChinese
-      ? "Answer in Simplified Chinese (简体中文)."
-      : "Answer in English."
+    let languageName = ReadingLanguage.displayName(for: targetLanguage)
+    let summaryFormat = ReadingLanguage.summaryFormat(for: targetLanguage)
+    let langInstruction = "Answer in \(languageName)."
 
     if let content = articleContent, !content.isEmpty {
       prompt += "\nArticle Content (Excerpt):\n"
@@ -385,9 +356,10 @@ final class AIService: Sendable {
     preferredLanguage: String,
     localeIdentifier: String = Locale.current.identifier
   ) -> Bool {
-    if preferredLanguage == "system" {
-      return localeIdentifier.lowercased().starts(with: "zh")
-    }
-    return preferredLanguage == "zh-Hans"
+    let code = ReadingLanguage.resolvedCode(
+      preferredLanguage: preferredLanguage,
+      localeIdentifier: localeIdentifier
+    )
+    return code.starts(with: "zh")
   }
 }

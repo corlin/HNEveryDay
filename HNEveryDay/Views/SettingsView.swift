@@ -152,8 +152,9 @@ struct SettingsView: View {
         Section {
           Picker("AI Response Language", selection: $preferredLanguage) {
             Text("System Default", comment: "Follow device language").tag("system")
-            Text("English").tag("en")
-            Text("简体中文").tag("zh-Hans")
+            ForEach(ReadingLanguage.supportedOptions) { language in
+              Text(language.label).tag(language.code)
+            }
           }
 
           Picker("Article Translation", selection: $translationMode) {

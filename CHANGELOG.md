@@ -13,6 +13,7 @@
 - Added automatic feed title translation in Auto mode, with visible-row translation, original-title fallback, and cached translated titles.
 - Cached translated article title/body locally and added a translated Reader view backed by OpenAI-compatible providers.
 - Switched the first-run AI defaults to DeepSeek with `deepseek-v4-flash` while keeping API keys user-supplied and stored only in Keychain.
+- Expanded AI response and translation language options beyond English and Simplified Chinese, including Traditional Chinese, Japanese, Korean, Spanish, French, German, Portuguese, and Russian.
 - Updated README files to match the current Swift language mode, iOS deployment target, Xcode verification, and test command.
 
 ### Validation
