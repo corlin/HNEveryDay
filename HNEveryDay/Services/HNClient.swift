@@ -89,6 +89,34 @@ final class HNClient: Sendable {
     return try await fetch(url: url)
   }
 
+  /// Fetches story IDs from multiple feed types concurrently and returns a deduplicated array
+  func fetchMultiFeedIds(types: [StoryType], limitPerFeed: Int = 40) async throws -> [Int] {
+    let allFeedIds = try await withThrowingTaskGroup(of: [Int].self) { group in
+      for type in types {
+        group.addTask {
+          let ids = try await self.fetchStoryIds(type: type)
+          return Array(ids.prefix(limitPerFeed))
+        }
+      }
+      var results: [[Int]] = []
+      for try await ids in group {
+        results.append(ids)
+      }
+      return results
+    }
+
+    var seen = Set<Int>()
+    var uniqueIds: [Int] = []
+    for list in allFeedIds {
+      for id in list {
+        if seen.insert(id).inserted {
+          uniqueIds.append(id)
+        }
+      }
+    }
+    return uniqueIds
+  }
+
   // MARK: - Batch Helper
 
   /// Fetches all items in parallel using TaskGroup

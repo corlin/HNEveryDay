@@ -7,65 +7,149 @@
 
 import Foundation
 
+actor TaskCoalescer {
+  static let shared = TaskCoalescer()
+  private var inFlight: [String: Task<Any, Error>] = [:]
+
+  func runOrCoalesce<T: Sendable>(key: String, operation: @Sendable @escaping () async throws -> T) async throws -> T {
+    if let existingTask = inFlight[key] {
+      return try await existingTask.value as! T
+    }
+
+    let task = Task {
+      try await operation()
+    }
+
+    inFlight[key] = Task { try await task.value as Any }
+
+    defer {
+      inFlight.removeValue(forKey: key)
+    }
+
+    return try await task.value
+  }
+}
+
+struct AIChatMessage: Codable, Sendable {
+  let role: String
+  let content: String
+
+  nonisolated init(role: String, content: String) {
+    self.role = role
+    self.content = content
+  }
+}
+
+struct AIChatRequest: Codable, Sendable {
+  let model: String
+  let messages: [AIChatMessage]
+  let temperature: Double
+
+  nonisolated init(model: String, messages: [AIChatMessage], temperature: Double) {
+    self.model = model
+    self.messages = messages
+    self.temperature = temperature
+  }
+}
+
+struct AIChatResponse: Codable, Sendable {
+  struct Choice: Codable, Sendable {
+    let message: AIChatMessage
+
+    nonisolated init(message: AIChatMessage) {
+      self.message = message
+    }
+  }
+  let choices: [Choice]
+
+  nonisolated init(choices: [Choice]) {
+    self.choices = choices
+  }
+}
+
+struct AIArticleTranslation: Codable, Equatable, Sendable {
+  let title: String
+  let markdown: String
+
+  enum CodingKeys: String, CodingKey {
+    case title = "translated_title"
+    case markdown = "translated_markdown"
+  }
+
+  nonisolated init(title: String, markdown: String) {
+    self.title = title
+    self.markdown = markdown
+  }
+
+  nonisolated init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.title = try container.decode(String.self, forKey: .title)
+    self.markdown = try container.decode(String.self, forKey: .markdown)
+  }
+}
+
+struct AITitleTranslationInput: Codable, Equatable, Sendable {
+  let id: Int
+  let title: String
+}
+
+struct AITitleTranslationBatchResponse: Codable, Equatable, Sendable {
+  struct Translation: Codable, Equatable, Sendable {
+    let id: Int
+    let title: String
+
+    enum CodingKeys: String, CodingKey {
+      case id
+      case title = "translated_title"
+    }
+
+    nonisolated init(id: Int, title: String) {
+      self.id = id
+      self.title = title
+    }
+
+    nonisolated init(from decoder: Decoder) throws {
+      let container = try decoder.container(keyedBy: CodingKeys.self)
+      self.id = try container.decode(Int.self, forKey: .id)
+      self.title = try container.decode(String.self, forKey: .title)
+    }
+  }
+
+  let translations: [Translation]
+
+  enum CodingKeys: String, CodingKey {
+    case translations
+  }
+
+  nonisolated init(translations: [Translation]) {
+    self.translations = translations
+  }
+
+  nonisolated init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.translations = try container.decode([Translation].self, forKey: .translations)
+  }
+}
+
 final class AIService: Sendable {
   static let shared = AIService()
 
   // Request Models
-  struct ChatMessage: Codable {
-    let role: String
-    let content: String
-  }
-
-  struct ChatRequest: Codable {
-    let model: String
-    let messages: [ChatMessage]
-    let temperature: Double
-  }
-
-  struct ChatResponse: Codable {
-    struct Choice: Codable {
-      let message: ChatMessage
-    }
-    let choices: [Choice]
-  }
-
-  struct ArticleTranslation: Codable, Equatable {
-    let title: String
-    let markdown: String
-
-    enum CodingKeys: String, CodingKey {
-      case title = "translated_title"
-      case markdown = "translated_markdown"
-    }
-  }
-
-  struct TitleTranslationInput: Codable, Equatable {
-    let id: Int
-    let title: String
-  }
-
-  struct TitleTranslationBatchResponse: Codable, Equatable {
-    struct Translation: Codable, Equatable {
-      let id: Int
-      let title: String
-
-      enum CodingKeys: String, CodingKey {
-        case id
-        case title = "translated_title"
-      }
-    }
-
-    let translations: [Translation]
-  }
+  typealias ChatMessage = AIChatMessage
+  typealias ChatRequest = AIChatRequest
+  typealias ChatResponse = AIChatResponse
+  typealias ArticleTranslation = AIArticleTranslation
+  typealias TitleTranslationInput = AITitleTranslationInput
+  typealias TitleTranslationBatchResponse = AITitleTranslationBatchResponse
 
   // Core Logic
   func summarize(title: String, url: String?, articleContent: String?, comments: [String])
     async throws -> String
   {
-    // Read API key from Keychain (secure storage)
     let apiKey = KeychainHelper.read(key: "ai_api_key") ?? ""
     let baseUrl = UserDefaults.standard.string(forKey: "ai_base_url") ?? AIDefaults.baseURL
     let model = UserDefaults.standard.string(forKey: "ai_model") ?? AIDefaults.model
+    let preferredLang = UserDefaults.standard.string(forKey: "preferred_language") ?? "system"
 
     guard !apiKey.isEmpty else {
       throw NSError(
@@ -75,24 +159,25 @@ final class AIService: Sendable {
         ])
     }
 
-    // Construct Prompt
-    let preferredLang = UserDefaults.standard.string(forKey: "preferred_language") ?? "system"
-    let prompt = Self.buildSummaryPrompt(
-      title: title,
-      url: url,
-      articleContent: articleContent,
-      comments: comments,
-      preferredLanguage: preferredLang
-    )
+    let key = "summary-\(title)"
+    return try await TaskCoalescer.shared.runOrCoalesce(key: key) {
+      let prompt = Self.buildSummaryPrompt(
+        title: title,
+        url: url,
+        articleContent: articleContent,
+        comments: comments,
+        preferredLanguage: preferredLang
+      )
 
-    return try await sendChatCompletion(
-      apiKey: apiKey,
-      baseUrl: baseUrl,
-      model: model,
-      systemMessage: "You are a helpful assistant.",
-      userPrompt: prompt,
-      temperature: 0.7
-    )
+      return try await self.sendChatCompletion(
+        apiKey: apiKey,
+        baseUrl: baseUrl,
+        model: model,
+        systemMessage: "You are a helpful assistant.",
+        userPrompt: prompt,
+        temperature: 0.7
+      )
+    }
   }
 
   func translateArticle(
@@ -112,21 +197,24 @@ final class AIService: Sendable {
         ])
     }
 
-    let prompt = Self.buildArticleTranslationPrompt(
-      title: title,
-      articleText: articleText,
-      targetLanguage: targetLanguage
-    )
-    let response = try await sendChatCompletion(
-      apiKey: apiKey,
-      baseUrl: baseUrl,
-      model: model,
-      systemMessage: "You translate technical articles faithfully for Hacker News readers.",
-      userPrompt: prompt,
-      temperature: 0.2
-    )
+    let key = "article-\(targetLanguage)-\(title)"
+    return try await TaskCoalescer.shared.runOrCoalesce(key: key) {
+      let prompt = Self.buildArticleTranslationPrompt(
+        title: title,
+        articleText: articleText,
+        targetLanguage: targetLanguage
+      )
+      let response = try await self.sendChatCompletion(
+        apiKey: apiKey,
+        baseUrl: baseUrl,
+        model: model,
+        systemMessage: "You translate technical articles faithfully for Hacker News readers.",
+        userPrompt: prompt,
+        temperature: 0.2
+      )
 
-    return try Self.decodeArticleTranslation(response)
+      return try Self.decodeArticleTranslation(response)
+    }
   }
 
   func translateTitle(
@@ -156,16 +244,21 @@ final class AIService: Sendable {
         ])
     }
 
-    let response = try await sendChatCompletion(
-      apiKey: apiKey,
-      baseUrl: baseUrl,
-      model: model,
-      systemMessage: "You translate Hacker News story titles faithfully.",
-      userPrompt: Self.buildBatchTitleTranslationPrompt(titles: titles, targetLanguage: targetLanguage),
-      temperature: 0.1
-    )
+    let sortedIds = titles.map(\.id).sorted().map(String.init).joined(separator: "-")
+    let key = "batch-\(targetLanguage)-\(sortedIds)"
 
-    return try Self.decodeTitleTranslationBatch(response)
+    return try await TaskCoalescer.shared.runOrCoalesce(key: key) {
+      let response = try await self.sendChatCompletion(
+        apiKey: apiKey,
+        baseUrl: baseUrl,
+        model: model,
+        systemMessage: "You translate Hacker News story titles faithfully.",
+        userPrompt: Self.buildBatchTitleTranslationPrompt(titles: titles, targetLanguage: targetLanguage),
+        temperature: 0.1
+      )
+
+      return try Self.decodeTitleTranslationBatch(response)
+    }
   }
 
   private func sendChatCompletion(
@@ -229,6 +322,10 @@ final class AIService: Sendable {
         }
 
       } catch {
+        if Task.isCancelled || (error as NSError).code == NSURLErrorCancelled {
+          throw error
+        }
+
         print("⚠️ Attempt \(attempt) failed: \(error.localizedDescription)")
         lastError = error
 
@@ -252,7 +349,7 @@ final class AIService: Sendable {
         userInfo: [NSLocalizedDescriptionKey: "Failed after 3 retries."])
   }
 
-  static func buildArticleTranslationPrompt(
+  nonisolated static func buildArticleTranslationPrompt(
     title: String,
     articleText: String,
     targetLanguage: String
@@ -286,14 +383,14 @@ final class AIService: Sendable {
       """
   }
 
-  static func buildTitleTranslationPrompt(title: String, targetLanguage: String) -> String {
+  nonisolated static func buildTitleTranslationPrompt(title: String, targetLanguage: String) -> String {
     buildBatchTitleTranslationPrompt(
       titles: [TitleTranslationInput(id: 0, title: title)],
       targetLanguage: targetLanguage
     )
   }
 
-  static func buildBatchTitleTranslationPrompt(
+  nonisolated static func buildBatchTitleTranslationPrompt(
     titles: [TitleTranslationInput],
     targetLanguage: String
   ) -> String {
@@ -323,14 +420,14 @@ final class AIService: Sendable {
       """
   }
 
-  static func cleanTranslatedTitle(_ response: String) -> String {
+  nonisolated static func cleanTranslatedTitle(_ response: String) -> String {
     response
       .trimmingCharacters(in: .whitespacesAndNewlines)
       .trimmingCharacters(in: CharacterSet(charactersIn: "\"'`"))
       .trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
-  static func decodeTitleTranslationBatch(_ response: String) throws -> [Int: String] {
+  nonisolated static func decodeTitleTranslationBatch(_ response: String) throws -> [Int: String] {
     let trimmed = response.trimmingCharacters(in: .whitespacesAndNewlines)
     let jsonText: String
 
@@ -358,7 +455,7 @@ final class AIService: Sendable {
     )
   }
 
-  static func decodeArticleTranslation(_ response: String) throws -> ArticleTranslation {
+  nonisolated static func decodeArticleTranslation(_ response: String) throws -> ArticleTranslation {
     let trimmed = response.trimmingCharacters(in: .whitespacesAndNewlines)
     let jsonText: String
 
@@ -381,7 +478,7 @@ final class AIService: Sendable {
     return try JSONDecoder().decode(ArticleTranslation.self, from: data)
   }
 
-  static func buildSummaryPrompt(
+  nonisolated static func buildSummaryPrompt(
     title: String,
     url: String?,
     articleContent: String?,

@@ -71,6 +71,7 @@ struct StoryRowView: View {
 
         Text(displayTitle)
           .font(.system(size: 15, weight: isRead ? .regular : .semibold))
+          .tracking(AppTheme.Typography.titleTracking)
           .foregroundStyle(isRead ? .secondary : .primary)
           .lineLimit(3)
           .fixedSize(horizontal: false, vertical: true)
@@ -118,6 +119,7 @@ struct StoryRowView: View {
       }
     }
     .font(.system(size: 11, weight: .medium))
+    .tracking(AppTheme.Typography.metadataTracking)
     .foregroundStyle(.secondary)
   }
 

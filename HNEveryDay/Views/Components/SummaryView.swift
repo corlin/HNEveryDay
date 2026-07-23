@@ -112,11 +112,11 @@ struct SummaryView: View {
     .padding(.horizontal, 14)
     .padding(.vertical, 14)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(Color(.secondarySystemGroupedBackground))
-    .clipShape(RoundedRectangle(cornerRadius: 8))
+    .background(.ultraThinMaterial)
+    .clipShape(RoundedRectangle(cornerRadius: 10))
     .overlay(
-      RoundedRectangle(cornerRadius: 8)
-        .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+      RoundedRectangle(cornerRadius: 10)
+        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
     )
   }
 
@@ -129,11 +129,11 @@ struct SummaryView: View {
         .foregroundStyle(.secondary)
     }
     .frame(maxWidth: .infinity, minHeight: 190)
-    .background(Color(.secondarySystemGroupedBackground))
-    .clipShape(RoundedRectangle(cornerRadius: 8))
+    .background(.ultraThinMaterial)
+    .clipShape(RoundedRectangle(cornerRadius: 10))
     .overlay(
-      RoundedRectangle(cornerRadius: 8)
-        .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+      RoundedRectangle(cornerRadius: 10)
+        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
     )
   }
 

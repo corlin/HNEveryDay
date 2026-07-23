@@ -58,12 +58,17 @@ struct FeedView: View {
                   isTranslatingTitle: translatingTitleIds.contains(savedItem.id)
                 )
               }
-              .buttonStyle(.plain)
+              .buttonStyle(.tactile)
               .listRowSeparator(.hidden)
               .listRowInsets(EdgeInsets(top: 5, leading: 12, bottom: 5, trailing: 12))
               .listRowBackground(Color.clear)
-              .task(id: titleTranslationTaskID(for: savedItem)) {
-                await queueTitleTranslationIfNeeded(for: savedItem)
+              .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                Button {
+                  manuallyTranslateTitle(for: savedItem)
+                } label: {
+                  Label("Translate", systemImage: "sparkles")
+                }
+                .tint(.blue)
               }
               .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                 Button(role: .destructive) {
@@ -85,12 +90,17 @@ struct FeedView: View {
                 isTranslatingTitle: translatingTitleIds.contains(story.id)
               )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.tactile)
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 5, leading: 12, bottom: 5, trailing: 12))
             .listRowBackground(Color.clear)
-            .task(id: titleTranslationTaskID(for: story)) {
-              await queueTitleTranslationIfNeeded(for: story)
+            .swipeActions(edge: .leading, allowsFullSwipe: false) {
+              Button {
+                manuallyTranslateTitle(for: story)
+              } label: {
+                Label("Translate", systemImage: "sparkles")
+              }
+              .tint(.blue)
             }
             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
               Button {
@@ -101,6 +111,21 @@ struct FeedView: View {
                   isSaved ? "Unsave" : "Save", systemImage: isSaved ? "bookmark.slash" : "bookmark")
               }
               .tint(.orange)
+            }
+            .contextMenu {
+              Button {
+                manuallyTranslateTitle(for: story)
+              } label: {
+                Label("Translate Title", systemImage: "sparkles")
+              }
+
+              Button {
+                dataService.toggleSave(item: story)
+              } label: {
+                let isSaved = dataService.savedStoryIds.contains(story.id)
+                Label(
+                  isSaved ? "Unsave" : "Save", systemImage: isSaved ? "bookmark.slash" : "bookmark")
+              }
             }
             .onAppear {
               if story.id == viewModel.stories.last?.id {
@@ -240,83 +265,43 @@ struct FeedView: View {
   }
 
   @MainActor
-  private func queueTitleTranslationIfNeeded(for item: HNItem) async {
-    guard translationMode == .auto else { return }
+  private func manuallyTranslateTitle(for item: HNItem) {
     guard let title = item.title, !title.isEmpty else { return }
-    guard translatedTitles[item.id] == nil else { return }
-    guard !translatingTitleIds.contains(item.id) else { return }
-    guard !failedTitleTranslationIds.contains(item.id) else { return }
+    AppTheme.Haptics.playLightImpact()
 
-    if let cached = DataService.shared.fetchTitleTranslation(id: item.id, targetLanguage: targetLanguage) {
-      translatedTitles[item.id] = cached
-      return
-    }
-
-    guard ReadingLanguage.shouldTranslate(sourceText: title, targetLanguage: targetLanguage) else {
-      return
-    }
-
-    pendingTitleTranslationItems[item.id] = item
     translatingTitleIds.insert(item.id)
+    failedTitleTranslationIds.remove(item.id)
 
-    try? await Task.sleep(nanoseconds: 350_000_000)
-    await flushTitleTranslationBatch()
-  }
+    let targetLang = targetLanguage
+    let input = AIService.TitleTranslationInput(id: item.id, title: title)
 
-  @MainActor
-  private func flushTitleTranslationBatch() async {
-    guard !isFlushingTitleTranslations else { return }
-    guard !pendingTitleTranslationItems.isEmpty else { return }
-
-    isFlushingTitleTranslations = true
-    let batch = Array(pendingTitleTranslationItems.values.prefix(titleTranslationBatchLimit))
-    let batchIds = Set(batch.map(\.id))
-    for id in batchIds {
-      pendingTitleTranslationItems.removeValue(forKey: id)
-    }
-
-    defer {
-      for id in batchIds {
-        translatingTitleIds.remove(id)
-      }
-      isFlushingTitleTranslations = false
-    }
-
-    let inputs = batch.compactMap { item -> AIService.TitleTranslationInput? in
-      guard let title = item.title, !title.isEmpty else { return nil }
-      return AIService.TitleTranslationInput(id: item.id, title: title)
-    }
-
-    guard !inputs.isEmpty else { return }
-
-    do {
-      let translations = try await AIService.shared.translateTitles(
-        inputs,
-        targetLanguage: targetLanguage
-      )
-
-      for item in batch {
-        guard let originalTitle = item.title,
-          let translatedTitle = translations[item.id],
-          !translatedTitle.isEmpty
-        else { continue }
-
-        translatedTitles[item.id] = translatedTitle
-        DataService.shared.saveTitleTranslation(
-          id: item.id,
-          title: originalTitle,
-          url: item.url,
-          targetLanguage: targetLanguage,
-          translatedTitle: translatedTitle
-        )
-      }
-    } catch {
-      failedTitleTranslationIds.formUnion(batchIds)
-    }
-
-    if !pendingTitleTranslationItems.isEmpty {
-      Task {
-        await flushTitleTranslationBatch()
+    Task.detached(priority: .userInitiated) {
+      do {
+        let result = try await AIService.shared.translateTitles([input], targetLanguage: targetLang)
+        if let translated = result[item.id], !translated.isEmpty {
+          await MainActor.run {
+            self.translatedTitles[item.id] = translated
+            self.translatingTitleIds.remove(item.id)
+            AppTheme.Haptics.playSuccessNotification()
+          }
+          await DataService.shared.saveTitleTranslation(
+            id: item.id,
+            title: title,
+            url: item.url,
+            targetLanguage: targetLang,
+            translatedTitle: translated
+          )
+        } else {
+          await MainActor.run {
+            self.translatingTitleIds.remove(item.id)
+            self.failedTitleTranslationIds.insert(item.id)
+          }
+        }
+      } catch {
+        await MainActor.run {
+          self.translatingTitleIds.remove(item.id)
+          self.failedTitleTranslationIds.insert(item.id)
+        }
       }
     }
   }

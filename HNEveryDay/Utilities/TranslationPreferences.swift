@@ -8,7 +8,7 @@
 import Foundation
 import NaturalLanguage
 
-struct ReadingLanguageOption: Identifiable, Hashable {
+struct ReadingLanguageOption: Identifiable, Hashable, Sendable {
   let code: String
   let label: String
   let instructionName: String
@@ -22,7 +22,7 @@ struct ReadingLanguageOption: Identifiable, Hashable {
   var id: String { code }
 }
 
-enum TranslationMode: String, CaseIterable, Identifiable {
+enum TranslationMode: String, CaseIterable, Identifiable, Sendable {
   case off
   case onDemand = "on_demand"
   case auto
@@ -30,10 +30,10 @@ enum TranslationMode: String, CaseIterable, Identifiable {
   var id: String { rawValue }
 }
 
-enum ReadingLanguage {
-  static let systemCode = "system"
+enum ReadingLanguage: Sendable {
+  nonisolated static let systemCode = "system"
 
-  static let supportedOptions: [ReadingLanguageOption] = [
+  nonisolated static let supportedOptions: [ReadingLanguageOption] = [
     ReadingLanguageOption(
       code: "en",
       label: "English",
@@ -146,7 +146,7 @@ enum ReadingLanguage {
     ),
   ]
 
-  static func resolvedCode(
+  nonisolated static func resolvedCode(
     preferredLanguage: String,
     localeIdentifier: String = Locale.current.identifier
   ) -> String {
@@ -156,19 +156,19 @@ enum ReadingLanguage {
     return option(for: preferredLanguage).code
   }
 
-  static func displayName(for code: String) -> String {
+  nonisolated static func displayName(for code: String) -> String {
     option(for: code).instructionName
   }
 
-  static func shortLabel(for code: String) -> String {
+  nonisolated static func shortLabel(for code: String) -> String {
     option(for: code).label
   }
 
-  static func option(for code: String) -> ReadingLanguageOption {
+  nonisolated static func option(for code: String) -> ReadingLanguageOption {
     supportedOptions.first { $0.code == code } ?? supportedOptions[0]
   }
 
-  static func summaryFormat(for code: String) -> String {
+  nonisolated static func summaryFormat(for code: String) -> String {
     let option = option(for: code)
     return """
       ## 📝 \(option.coreHeading)
@@ -184,7 +184,7 @@ enum ReadingLanguage {
       """
   }
 
-  static func likelyLanguageCode(for text: String) -> String? {
+  nonisolated static func likelyLanguageCode(for text: String) -> String? {
     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard trimmed.count >= 12 else { return nil }
 
@@ -202,14 +202,14 @@ enum ReadingLanguage {
     }
   }
 
-  static func shouldTranslate(sourceText: String, targetLanguage: String) -> Bool {
+  nonisolated static func shouldTranslate(sourceText: String, targetLanguage: String) -> Bool {
     guard let sourceLanguage = likelyLanguageCode(for: sourceText) else {
       return targetLanguage != "en"
     }
     return languageFamily(sourceLanguage) != languageFamily(targetLanguage)
   }
 
-  private static func resolvedSystemCode(localeIdentifier: String) -> String {
+  nonisolated private static func resolvedSystemCode(localeIdentifier: String) -> String {
     let lowered = localeIdentifier.lowercased()
     if lowered.starts(with: "zh") {
       return lowered.contains("hant") || lowered.contains("_tw") || lowered.contains("_hk")
@@ -220,7 +220,7 @@ enum ReadingLanguage {
     return normalizeLanguageCode(languageCode ?? "en")
   }
 
-  private static func normalizeLanguageCode(_ code: String) -> String {
+  nonisolated private static func normalizeLanguageCode(_ code: String) -> String {
     let lowered = code.lowercased()
     if lowered.starts(with: "zh") { return "zh-Hans" }
     if lowered.starts(with: "pt") { return "pt-BR" }
@@ -228,7 +228,7 @@ enum ReadingLanguage {
     return supportedOptions.contains { $0.code == base } ? base : "en"
   }
 
-  private static func languageFamily(_ code: String) -> String {
+  nonisolated private static func languageFamily(_ code: String) -> String {
     if code.starts(with: "zh") { return "zh" }
     if code.starts(with: "pt") { return "pt" }
     return code

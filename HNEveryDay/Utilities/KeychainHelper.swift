@@ -8,10 +8,10 @@
 import Foundation
 import Security
 
-enum KeychainHelper {
-  private static let service = "com.hneveryday.app"
+enum KeychainHelper: Sendable {
+  nonisolated private static let service = "com.hneveryday.app"
   
-  static func save(key: String, value: String) -> Bool {
+  nonisolated static func save(key: String, value: String) -> Bool {
     guard let data = value.data(using: .utf8) else { return false }
     
     // Delete existing item first
@@ -28,7 +28,7 @@ enum KeychainHelper {
     return status == errSecSuccess
   }
   
-  static func read(key: String) -> String? {
+  nonisolated static func read(key: String) -> String? {
     let query: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: service,
@@ -48,7 +48,7 @@ enum KeychainHelper {
   }
   
   @discardableResult
-  static func delete(key: String) -> Bool {
+  nonisolated static func delete(key: String) -> Bool {
     let query: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: service,

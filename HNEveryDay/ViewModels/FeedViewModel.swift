@@ -17,8 +17,9 @@ final class FeedViewModel {
   // Pagination State
   private var allStoryIds: [Int] = []
   private var currentPage = 0
-  private let pageSize = 20
+  private let pageSize = 40
   private var isFetchingPage = false
+  private var isPrefetchingMultiFeeds = false
 
   var hasMoreStories: Bool {
     return stories.count < allStoryIds.count
@@ -44,6 +45,13 @@ final class FeedViewModel {
     do {
       allStoryIds = try await HNClient.shared.fetchStoryIds(type: selectedFeedType)
       await loadNextPage()
+      
+      // Kick off background multi-feed prefetch for top/new/best if current feed is top
+      if selectedFeedType == .top && !isPrefetchingMultiFeeds {
+        Task.detached(priority: .utility) { [weak self] in
+          await self?.prefetchPrimaryFeeds()
+        }
+      }
     } catch {
       print("Failed to fetch IDs: \(error)")
     }
@@ -68,16 +76,87 @@ final class FeedViewModel {
 
     do {
       let newStories = try await HNClient.shared.fetchItems(ids: pageIds)
-      // Filter out any failed fetches (nils are already handled in client, but verify non-nil content)
-      // Also filter out dead/deleted if they came through
       let validStories = newStories.filter { $0.title != nil }
 
       self.stories.append(contentsOf: validStories)
       self.currentPage += 1
+
+      // Data-driven background title translation batch pipeline
+      scheduleBackgroundTitleTranslations(for: validStories)
     } catch {
       print("Failed to load page: \(error)")
     }
 
     isFetchingPage = false
+  }
+
+  // MARK: - Multi-Feed Prefetch & AI Batch Pipeline
+
+  private func prefetchPrimaryFeeds() async {
+    isPrefetchingMultiFeeds = true
+    defer { isPrefetchingMultiFeeds = false }
+
+    do {
+      let primaryTypes: [HNClient.StoryType] = [.top, .new, .best]
+      let uniqueIds = try await HNClient.shared.fetchMultiFeedIds(types: primaryTypes, limitPerFeed: 40)
+      let prefetchedStories = try await HNClient.shared.fetchItems(ids: uniqueIds)
+      let validStories = prefetchedStories.filter { $0.title != nil }
+
+      // Schedule background large-batch AI translation for prefetched items
+      scheduleBackgroundTitleTranslations(for: validStories)
+    } catch {
+      print("Multi-feed prefetch error: \(error)")
+    }
+  }
+
+  private func scheduleBackgroundTitleTranslations(for items: [HNItem]) {
+    let modeRaw = UserDefaults.standard.string(forKey: "title_translation_mode") ?? "auto"
+    guard modeRaw == "auto" else { return }
+
+    let targetLanguage = UserDefaults.standard.string(forKey: "reading_language_preference") ?? "system"
+
+    Task.detached(priority: .background) {
+      var inputs: [AIService.TitleTranslationInput] = []
+
+      for item in items {
+        guard let title = item.title, !title.isEmpty else { continue }
+        // Skip if already translated in cache
+        if await DataService.shared.fetchTitleTranslation(id: item.id, targetLanguage: targetLanguage) != nil {
+          continue
+        }
+        // Skip if language matching source
+        if !ReadingLanguage.shouldTranslate(sourceText: title, targetLanguage: targetLanguage) {
+          continue
+        }
+        inputs.append(AIService.TitleTranslationInput(id: item.id, title: title))
+      }
+
+      guard !inputs.isEmpty else { return }
+
+      // Chunk into super batches (50 items per request)
+      let batchSize = 50
+      let chunks = stride(from: 0, to: inputs.count, by: batchSize).map {
+        Array(inputs[$0..<min($0 + batchSize, inputs.count)])
+      }
+
+      for chunk in chunks {
+        do {
+          let translations = try await AIService.shared.translateTitles(chunk, targetLanguage: targetLanguage)
+          for input in chunk {
+            if let translated = translations[input.id], !translated.isEmpty {
+              await DataService.shared.saveTitleTranslation(
+                id: input.id,
+                title: input.title,
+                url: nil,
+                targetLanguage: targetLanguage,
+                translatedTitle: translated
+              )
+            }
+          }
+        } catch {
+          print("Batch AI translation failed for chunk of \(chunk.count): \(error)")
+        }
+      }
+    }
   }
 }

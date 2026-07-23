@@ -46,6 +46,7 @@ struct CommentRowView: View {
     .clipShape(RoundedRectangle(cornerRadius: 8))
     .overlay(rowStroke)
     .contentShape(Rectangle())
+    .animation(AppTheme.Spring.fluid, value: isCollapsed)
     .onAppear {
       if let html = node.item.text, !html.isEmpty {
         displayText = HTMLHelper.stripTags(html)
@@ -64,6 +65,7 @@ struct CommentRowView: View {
 
       Text(node.item.time.shortTimeAgo)
         .font(.system(size: 11, weight: .medium, design: .monospaced))
+        .tracking(AppTheme.Typography.metadataTracking)
         .foregroundStyle(.secondary.opacity(0.82))
         .lineLimit(1)
 
