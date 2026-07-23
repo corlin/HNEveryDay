@@ -56,6 +56,12 @@ public enum AppTheme {
       generator.impactOccurred()
     }
     
+    public static func playMediumImpact() {
+      let generator = UIImpactFeedbackGenerator(style: .medium)
+      generator.prepare()
+      generator.impactOccurred()
+    }
+    
     public static func playSuccessNotification() {
       let generator = UINotificationFeedbackGenerator()
       generator.prepare()

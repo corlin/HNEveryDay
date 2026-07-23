@@ -518,8 +518,7 @@ struct ItemDetailView: View {
   }
 
   private func toggleCollapse(_ id: Int) {
-    let generator = UIImpactFeedbackGenerator(style: .light)
-    generator.impactOccurred()
+    AppTheme.Haptics.playLightImpact()
 
     if collapsedCommentIds.contains(id) {
       collapsedCommentIds.remove(id)

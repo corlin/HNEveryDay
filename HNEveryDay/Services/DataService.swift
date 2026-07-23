@@ -277,7 +277,7 @@ class DataService: ObservableObject {
         try context.save()
         savedStoryIds.insert(id)
       }
-      UINotificationFeedbackGenerator().notificationOccurred(.success)
+      AppTheme.Haptics.playMediumImpact()
     } catch {
       print("Failed to toggle save: \(error)")
     }

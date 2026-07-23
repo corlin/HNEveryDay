@@ -215,7 +215,7 @@ struct SummaryView: View {
           summary: result
         )
         self.onSummaryGenerated?(result)
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        AppTheme.Haptics.playSuccessNotification()
       }
     } catch {
       await MainActor.run {
