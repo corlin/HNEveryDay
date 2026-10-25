@@ -1,3 +1,4 @@
+import type { TokenUsage } from "./llm";
 import type { DevicePrincipal } from "./auth/token";
 import type { QuotaKind, RemoteConfig, Tier, TierQuotas } from "./config";
 import type { Env } from "./env";
@@ -135,12 +136,46 @@ export async function assertBudget(env: Env, now = Date.now()): Promise<void> {
   }
 }
 
-export async function recordTokens(env: Env, tokens: number, now = Date.now()): Promise<void> {
-  if (!tokens || tokens <= 0) return;
-  await env.DB.prepare(
-    `INSERT INTO budget_daily (day, tokens) VALUES (?, ?)
-     ON CONFLICT(day) DO UPDATE SET tokens = tokens + excluded.tokens`,
-  )
-    .bind(utcDay(now), Math.round(tokens))
-    .run();
+export type UsageFeature = "title" | "summary" | "article" | "agent" | "questions";
+export type UsageSource = "user" | "cron";
+
+/** Share of DAILY_TOKEN_BUDGET at which a "[budget-alert]" line is logged (once per day). */
+export const BUDGET_ALERT_RATIO = 0.8;
+
+/**
+ * Records one model call: adds to today's circuit-breaker total and to the per-feature cost table,
+ * and logs an alert when today's total first crosses BUDGET_ALERT_RATIO of the budget.
+ */
+export async function recordUsage(
+  env: Env,
+  feature: UsageFeature,
+  usage: TokenUsage,
+  source: UsageSource = "user",
+  now = Date.now(),
+): Promise<void> {
+  const total = Math.round(usage.inputTokens + usage.outputTokens);
+  if (total <= 0) return;
+  const day = utcDay(now);
+  const [, , after] = await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO budget_daily (day, tokens) VALUES (?, ?)
+       ON CONFLICT(day) DO UPDATE SET tokens = tokens + excluded.tokens`,
+    ).bind(day, total),
+    env.DB.prepare(
+      `INSERT INTO token_usage_daily (day, feature, source, calls, input_tokens, cached_input_tokens, output_tokens)
+       VALUES (?, ?, ?, 1, ?, ?, ?)
+       ON CONFLICT(day, feature, source) DO UPDATE SET
+         calls = calls + 1,
+         input_tokens = input_tokens + excluded.input_tokens,
+         cached_input_tokens = cached_input_tokens + excluded.cached_input_tokens,
+         output_tokens = output_tokens + excluded.output_tokens`,
+    ).bind(day, feature, source, Math.round(usage.inputTokens), Math.round(usage.cachedInputTokens), Math.round(usage.outputTokens)),
+    env.DB.prepare("SELECT tokens FROM budget_daily WHERE day = ?").bind(day),
+  ]);
+  const budget = intVar(env.DAILY_TOKEN_BUDGET, 0);
+  const used = (after.results[0] as { tokens?: number } | undefined)?.tokens ?? 0;
+  const threshold = budget * BUDGET_ALERT_RATIO;
+  if (budget > 0 && used >= threshold && used - total < threshold) {
+    console.warn(`[budget-alert] ${day}: ${used} of ${budget} daily tokens used (${Math.round((used / budget) * 100)}%)`);
+  }
 }

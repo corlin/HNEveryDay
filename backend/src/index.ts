@@ -2,7 +2,7 @@ import { loadConfig } from "./config";
 import { runScheduled } from "./cron";
 import type { Env } from "./env";
 import { errorResponse, HttpError, json } from "./http";
-import { handleTakedown } from "./routes/admin";
+import { handleTakedown, handleUsage } from "./routes/admin";
 import {
   handleAgentChat,
   handleAgentQuestions,
@@ -35,6 +35,7 @@ const routes: Record<string, Handler> = {
   "POST /api/v1/subscription/verify": handleVerifySubscription,
   "POST /api/v1/appstore/notifications": handleAppStoreNotification,
   "POST /api/v1/admin/takedown": handleTakedown,
+  "GET /api/v1/admin/usage": handleUsage,
 };
 
 export default {

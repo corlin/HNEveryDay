@@ -67,7 +67,7 @@ export async function prewarm(env: Env): Promise<void> {
 
   const langs = listVar(env.PREWARM_LANGS).filter(isSupportedLanguage);
   for (const lang of langs) {
-    for (let i = 0; i < ids.length; i += 30) await translateTitles(env, ids.slice(i, i + 30), lang);
+    for (let i = 0; i < ids.length; i += 30) await translateTitles(env, ids.slice(i, i + 30), lang, "cron");
   }
   await prewarmAgentQuestions(env, selectQuestionCandidates(byList, stories), langs);
 }
@@ -92,7 +92,7 @@ export async function prewarmAgentQuestions(env: Env, candidates: number[], lang
       if (existing.has(id)) continue;
       if (generated >= PREWARM_PLAN.questions.perRun) return generated;
       try {
-        await agentQuestions(env, id, lang);
+        await agentQuestions(env, id, lang, undefined, "cron");
         generated++;
       } catch (error) {
         console.warn("question prewarm failed", id, String(error));

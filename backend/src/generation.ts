@@ -4,7 +4,7 @@ import { getStories, getStory, storyDiscussion } from "./hn";
 import { chatCompletion } from "./llm";
 import { getOutput, getOutputs, putOutputs } from "./outputs";
 import { agentQuestionsMessages, parseAgentQuestions, parseTitleBatch, summaryMessages, titleBatchMessages, type AgentQuestion } from "./prompts";
-import { assertBudget, recordTokens } from "./quota";
+import { assertBudget, recordUsage, type UsageSource } from "./quota";
 
 export interface SummaryJob {
   storyId: number;
@@ -32,7 +32,7 @@ export async function generateSummary(env: Env, job: SummaryJob): Promise<Summar
     temperature: 0.5,
     maxTokens: 900,
   });
-  await recordTokens(env, result.totalTokens);
+  await recordUsage(env, "summary", result.usage);
   const summary = result.content.trim();
   await putOutputs(env, "summary", job.lang, new Map([[job.storyId, summary]]));
   return { summary, cached: false };
@@ -44,6 +44,7 @@ export async function agentQuestions(
   storyId: number,
   lang: string,
   articleText?: string,
+  source: UsageSource = "user",
 ): Promise<{ questions: AgentQuestion[]; cached: boolean }> {
   const existing = await getOutput(env, "questions", lang, storyId);
   if (existing) return { questions: JSON.parse(existing) as AgentQuestion[], cached: true };
@@ -58,7 +59,7 @@ export async function agentQuestions(
     maxTokens: 500,
     json: true,
   });
-  await recordTokens(env, result.totalTokens);
+  await recordUsage(env, "questions", result.usage, source);
   const questions = parseAgentQuestions(result.content);
   if (questions.length === 0) throw new HttpError(502, "upstream_error", "Could not generate questions");
   await putOutputs(env, "questions", lang, new Map([[storyId, JSON.stringify(questions)]]));
@@ -69,7 +70,12 @@ export async function agentQuestions(
  * Translates titles for `ids`, generating only the missing ones. Returns whatever is available;
  * ids that could not be translated (budget, provider failure) are simply absent.
  */
-export async function translateTitles(env: Env, ids: number[], lang: string): Promise<Map<number, string>> {
+export async function translateTitles(
+  env: Env,
+  ids: number[],
+  lang: string,
+  source: UsageSource = "user",
+): Promise<Map<number, string>> {
   const result = await getOutputs(env, "title", lang, ids);
   const missing = ids.filter((id) => !result.has(id));
   if (missing.length === 0) return result;
@@ -90,7 +96,7 @@ export async function translateTitles(env: Env, ids: number[], lang: string): Pr
       maxTokens: 120 * inputs.length + 200,
       json: true,
     });
-    await recordTokens(env, completion.totalTokens);
+    await recordUsage(env, "title", completion.usage, source);
     const parsed = parseTitleBatch(completion.content);
     const generated = new Map([...parsed].filter(([id]) => stories.has(id)));
     await putOutputs(env, "title", lang, generated);

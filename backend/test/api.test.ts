@@ -5,12 +5,14 @@ import { assertFeatureEnabled, defaultConfig, resetConfigCache } from "../src/co
 import { archiveExpiredStories, prewarmAgentQuestions, runScheduled, selectQuestionCandidates } from "../src/cron";
 import type { Env } from "../src/env";
 import { HttpError } from "../src/http";
+import { toTokenUsage } from "../src/llm";
+import { estimateCost } from "../src/routes/admin";
 import { PROMPT_VERSIONS } from "../src/prompts";
 import { utcDay } from "../src/quota";
 import { setTrustedRootForTesting } from "../src/subscription/jws";
 import { anonymousDevice, call } from "./helpers/client";
 import { makeAppleLikeChain, signJws } from "./helpers/certs";
-import { mockUpstream } from "./helpers/upstream";
+import { defaultLlm as defaultLlmForTests, mockUpstream } from "./helpers/upstream";
 
 const E = env as unknown as Env;
 
@@ -400,6 +402,53 @@ describe("moderation", () => {
     expect(after.missing).toEqual([id]);
     expect(llmCalls).toHaveLength(1);
     expect((await call("/api/v1/summary", { token, body: { story_id: id, lang: "en" } })).status).toBe(451);
+  });
+});
+
+describe("cost tracking", () => {
+  it("normalizes DeepSeek usage including cache hits", () => {
+    expect(toTokenUsage({ prompt_tokens: 1000, completion_tokens: 200, prompt_cache_hit_tokens: 600 })).toEqual({
+      inputTokens: 1000,
+      cachedInputTokens: 600,
+      outputTokens: 200,
+    });
+    expect(toTokenUsage({ total_tokens: 0 })).toBeNull();
+    expect(estimateCost({ input_tokens: 1_000_000, cached_input_tokens: 500_000, output_tokens: 1_000_000 }, {
+      currency: "CNY",
+      input_per_million: 2,
+      cached_input_per_million: 0.5,
+      output_per_million: 8,
+    })).toBe(9.25);
+  });
+
+  it("records usage per feature and source and reports it to admins with estimated cost", async () => {
+    mockUpstream((callBody) =>
+      callBody.stream
+        ? defaultLlmForTests(callBody)
+        : Response.json({
+            choices: [{ message: { role: "assistant", content: "## 📝 文章核心\n摘要" } }],
+            usage: { prompt_tokens: 3000, completion_tokens: 400, prompt_cache_hit_tokens: 1000 },
+          }),
+    );
+    const { token } = await attestedToken();
+    await call("/api/v1/summary", { token, body: { story_id: storyId(), lang: "en" } });
+
+    expect((await call("/api/v1/admin/usage")).status).toBe(401);
+    await E.CONFIG.put("pricing", JSON.stringify({ currency: "CNY", input_per_million: 2, cached_input_per_million: 0.5, output_per_million: 8 }));
+    try {
+      const report = (await (await call("/api/v1/admin/usage?days=3", { headers: { authorization: "Bearer test-admin" } })).json()) as {
+        budget: { daily_tokens: number; today_tokens: number };
+        days: { day: string; est_cost: number; features: { feature: string; source: string; calls: number; cached_input_tokens: number }[] }[];
+      };
+      expect(report.budget.daily_tokens).toBe(2_000_000);
+      const today = report.days[0];
+      const summary = today.features.find((f) => f.feature === "summary" && f.source === "user");
+      expect(summary?.calls).toBeGreaterThanOrEqual(1);
+      expect(summary?.cached_input_tokens).toBeGreaterThanOrEqual(1000);
+      expect(today.est_cost).toBeGreaterThan(0);
+    } finally {
+      await E.CONFIG.delete("pricing");
+    }
   });
 });
 

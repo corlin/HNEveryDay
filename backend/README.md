@@ -60,6 +60,23 @@ npx wrangler kv key put --binding CONFIG config '{"disabled_countries":["CN"],"d
 npx wrangler kv key put --binding CONFIG config '{"quotas":{"free":{"summary":20}}}' --remote
 ```
 
+## 成本跟踪
+
+- 每次调用模型都会按 天 × 功能（title/summary/article/agent/questions）× 来源（user/cron）记录调用次数、输入/缓存命中/输出 token（表 `token_usage_daily`）；`budget_daily` 仍是熔断用的每日总量。
+- 单价放在 KV 的 `pricing` 键里（每百万 token），以 DeepSeek 官网当前报价为准：
+
+```sh
+npx wrangler kv key put --binding CONFIG pricing '{"currency":"CNY","input_per_million":<输入>,"cached_input_per_million":<缓存命中输入>,"output_per_million":<输出>}' --remote
+```
+
+- 查询近 N 天用量与估算金额（含今日预算占比、缓存数量、活跃设备）：
+
+```sh
+curl -s "https://hnapi.caifu.social/api/v1/admin/usage?days=14" -H "authorization: Bearer $(cat ~/.hneveryday_admin_token)"
+```
+
+- 当天用量首次超过 `DAILY_TOKEN_BUDGET` 的 80% 时，Worker 日志会打出 `[budget-alert]`，可在 Cloudflare 控制台 Workers 日志里搜索或配置通知。
+
 ## 运维
 
 - 下线某个故事的 AI 内容：`curl -X POST https://hnapi.caifu.social/api/v1/admin/takedown -H "authorization: Bearer $ADMIN_TOKEN" -d '{"story_id":123}'`

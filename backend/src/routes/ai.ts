@@ -4,10 +4,10 @@ import { assertFeatureEnabled, loadConfig } from "../config";
 import type { Env } from "../env";
 import { HttpError, json, optionalString, readJson, requireStoryId, requireString } from "../http";
 import { getStory, storyDiscussion } from "../hn";
-import { chatCompletion, openChatStream, parseChatStream, type ChatMessage } from "../llm";
+import { chatCompletion, openChatStream, parseChatStream, type ChatMessage, type TokenUsage } from "../llm";
 import { blockedAmong, getOutput } from "../outputs";
 import { AGENT_MAX_HISTORY, agentSystemPrompt, articleTranslationMessages, isSupportedLanguage } from "../prompts";
-import { assertBudget, consumeQuota, recordTokens, refundQuota, resolveTier, usageToday, quotaLimit } from "../quota";
+import { assertBudget, consumeQuota, recordUsage, refundQuota, resolveTier, usageToday, quotaLimit } from "../quota";
 import { agentQuestions, translateTitles } from "../generation";
 
 function requireLanguage(value: unknown): string {
@@ -89,7 +89,7 @@ export async function handleTranslateArticle(request: Request, env: Env): Promis
       maxTokens: 4000,
       json: true,
     });
-    await recordTokens(env, completion.totalTokens);
+    await recordUsage(env, "article", completion.usage);
     const start = completion.content.indexOf("{");
     const end = completion.content.lastIndexOf("}");
     const parsed = JSON.parse(completion.content.slice(start, end + 1)) as { translated_title?: string; translated_markdown?: string };
@@ -175,7 +175,7 @@ export async function handleAgentChat(request: Request, env: Env, ctx: Execution
   const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
   const writer = writable.getWriter();
   const pump = async () => {
-    let tokens = 0;
+    let usage: TokenUsage | undefined;
     let produced = 0;
     try {
       await writer.write(sse("meta", { tier, remaining: grant.remaining, limit: grant.limit }));
@@ -184,14 +184,16 @@ export async function handleAgentChat(request: Request, env: Env, ctx: Execution
           produced += chunk.text.length;
           await writer.write(sse("delta", { text: chunk.text }));
         }
-        if (chunk.totalTokens) tokens = chunk.totalTokens;
+        if (chunk.usage) usage = chunk.usage;
         if (chunk.finishReason) await writer.write(sse("done", { finish_reason: chunk.finishReason }));
       }
     } catch (error) {
       console.warn("agent stream ended early", String(error));
       await writer.write(sse("error", { code: "upstream_error", message: "The AI provider stopped responding" })).catch(() => {});
     } finally {
-      await recordTokens(env, tokens || Math.ceil(produced / 4) + 8000).catch(() => {});
+      // Without a usage report (stream cut short), estimate: the prompt is ~8k tokens on average.
+      const estimated = { inputTokens: 8000, cachedInputTokens: 0, outputTokens: Math.ceil(produced / 4) };
+      await recordUsage(env, "agent", usage ?? estimated).catch(() => {});
       await writer.close().catch(() => {});
     }
   };

@@ -8,9 +8,34 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface TokenUsage {
+  inputTokens: number;
+  /** Part of inputTokens served from the provider's context cache (cheaper). */
+  cachedInputTokens: number;
+  outputTokens: number;
+}
+
 export interface CompletionResult {
   content: string;
-  totalTokens: number;
+  usage: TokenUsage;
+}
+
+interface ProviderUsage {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+  prompt_cache_hit_tokens?: number;
+  prompt_tokens_details?: { cached_tokens?: number };
+}
+
+/** Normalizes OpenAI/DeepSeek usage objects. */
+export function toTokenUsage(usage: ProviderUsage | null | undefined): TokenUsage | null {
+  if (!usage) return null;
+  const input = usage.prompt_tokens ?? 0;
+  const output = usage.completion_tokens ?? Math.max(0, (usage.total_tokens ?? 0) - input);
+  if (input + output === 0) return null;
+  const cached = usage.prompt_cache_hit_tokens ?? usage.prompt_tokens_details?.cached_tokens ?? 0;
+  return { inputTokens: input, cachedInputTokens: Math.min(cached, input), outputTokens: output };
 }
 
 function endpoint(env: Env): string {
@@ -55,13 +80,16 @@ export async function chatCompletion(
       if (response.ok) {
         const data = (await response.json()) as {
           choices?: { message?: { content?: string } }[];
-          usage?: { total_tokens?: number };
+          usage?: ProviderUsage;
         };
         const content = data.choices?.[0]?.message?.content ?? "";
         if (!content) throw new Error("empty completion");
-        const totalTokens =
-          data.usage?.total_tokens ?? estimateTokens(messages.map((m) => m.content).join("")) + estimateTokens(content);
-        return { content, totalTokens };
+        const usage = toTokenUsage(data.usage) ?? {
+          inputTokens: estimateTokens(messages.map((m) => m.content).join("")),
+          cachedInputTokens: 0,
+          outputTokens: estimateTokens(content),
+        };
+        return { content, usage };
       }
       const text = await response.text();
       if (isContentRisk(response.status, text)) throw contentBlocked();
@@ -108,7 +136,7 @@ export async function openChatStream(
 export interface StreamChunk {
   text?: string;
   finishReason?: string;
-  totalTokens?: number;
+  usage?: TokenUsage;
 }
 
 /** Parses OpenAI-style SSE ("data: {...}\n\n", terminated by "data: [DONE]"). */
@@ -129,7 +157,7 @@ export async function* parseChatStream(body: ReadableStream<Uint8Array>): AsyncG
         if (data === "[DONE]") return;
         let parsed: {
           choices?: { delta?: { content?: string }; finish_reason?: string | null }[];
-          usage?: { total_tokens?: number } | null;
+          usage?: ProviderUsage | null;
         };
         try {
           parsed = JSON.parse(data);
@@ -140,8 +168,9 @@ export async function* parseChatStream(body: ReadableStream<Uint8Array>): AsyncG
         const chunk: StreamChunk = {};
         if (choice?.delta?.content) chunk.text = choice.delta.content;
         if (choice?.finish_reason) chunk.finishReason = choice.finish_reason;
-        if (parsed.usage?.total_tokens) chunk.totalTokens = parsed.usage.total_tokens;
-        if (chunk.text || chunk.finishReason || chunk.totalTokens) yield chunk;
+        const usage = toTokenUsage(parsed.usage);
+        if (usage) chunk.usage = usage;
+        if (chunk.text || chunk.finishReason || chunk.usage) yield chunk;
       }
     }
   } finally {
