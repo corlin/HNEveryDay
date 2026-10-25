@@ -10,7 +10,7 @@ import Foundation
 nonisolated enum BackendConfig {
   /// Deployed Cloudflare Worker (see backend/README.md). Can be overridden for testing
   /// with the "backend_base_url" user default.
-  static let defaultBaseURL = "https://hneveryday-api.corlin.workers.dev"
+  static let defaultBaseURL = "https://hneveryday-api.cybercorlin.workers.dev"
 
   static var baseURL: URL {
     let override = UserDefaults.standard.string(forKey: "backend_base_url") ?? ""
