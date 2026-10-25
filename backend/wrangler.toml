@@ -17,7 +17,7 @@ ALLOW_DEV_ATTEST = "true"
 # testing phase: set back to "false" before App Store release
 ALLOW_SANDBOX = "true"
 LLM_BASE_URL = "https://api.deepseek.com"
-LLM_MODEL = "deepseek-v4-flash"
+LLM_MODEL = "deepseek-flash"
 DAILY_TOKEN_BUDGET = "2000000"
 PREWARM_LANGS = "zh-Hans"
 MAX_DEVICES_PER_SUBSCRIPTION = "5"

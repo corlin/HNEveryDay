@@ -37,7 +37,7 @@ Get the "Hacker Perspective" in seconds.
 - **Magic Summary**: Tap the ✨ button to generate a concise summary of the **Article + Top Discussion**. We don't just summarize the link; we summarize *what hackers are saying about it*.
 - **BYO Key (Bring Your Own Key)**: No subscriptions. DeepSeek is preselected by default, but you still use your own API key.
 - **Multi-Provider Support**: Built-in presets for the best Global and Chinese models:
-    - 🇨🇳 **DeepSeek** (Recommended for coding/tech context, default: `deepseek-v4-flash`)
+    - 🇨🇳 **DeepSeek** (Recommended for coding/tech context, default: `deepseek-flash`)
     - 🇨🇳 **Qwen (Tongyi Qianwen)**
     - 🇨🇳 **ChatGLM (Zhipu)**
     - 🇨🇳 **Doubao (ByteDance)**
@@ -83,7 +83,7 @@ Get the "Hacker Perspective" in seconds.
 2. Select your **Provider Preset** (e.g., DeepSeek).
     - *The App automatically fills the correct Base URL and Model Name.*
 3. Paste your **API Key**. The app never bundles provider secrets.
-4. (Optional) You can manually edit the Model Name to use specific versions (default: `deepseek-v4-flash`).
+4. (Optional) You can manually edit the Model Name to use specific versions (default: `deepseek-flash`).
 5. Tap **Done**. Keys are stored securely on-device using iOS Keychain.
 
 ---

@@ -7,5 +7,5 @@
 
 enum AIDefaults: Sendable {
   nonisolated static let baseURL = "https://api.deepseek.com"
-  nonisolated static let model = "deepseek-v4-flash"
+  nonisolated static let model = "deepseek-flash"
 }
