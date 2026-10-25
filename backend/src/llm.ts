@@ -21,6 +21,15 @@ function headers(env: Env): HeadersInit {
   return { authorization: `Bearer ${env.LLM_API_KEY}`, "content-type": "application/json" };
 }
 
+/** DeepSeek rejects prompts its content-safety filter flags with HTTP 400 "Content Exists Risk". */
+export function isContentRisk(status: number, body: string): boolean {
+  return status === 400 && /content exists risk|content_filter/i.test(body);
+}
+
+function contentBlocked(): HttpError {
+  return new HttpError(422, "content_blocked", "This content can't be processed by the AI service");
+}
+
 /** Rough fallback when the provider omits usage: ~4 characters per token. */
 export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
@@ -55,9 +64,11 @@ export async function chatCompletion(
         return { content, totalTokens };
       }
       const text = await response.text();
+      if (isContentRisk(response.status, text)) throw contentBlocked();
       lastError = new Error(`provider ${response.status}: ${text.slice(0, 200)}`);
       if (response.status !== 429 && response.status < 500) break;
     } catch (error) {
+      if (error instanceof HttpError) throw error;
       lastError = error;
     }
     if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 250 * 2 ** attempt));
@@ -86,7 +97,9 @@ export async function openChatStream(
     }),
   });
   if (!response.ok || !response.body) {
-    console.error("LLM stream failed", response.status, (await response.text()).slice(0, 200));
+    const text = await response.text();
+    if (isContentRisk(response.status, text)) throw contentBlocked();
+    console.error("LLM stream failed", response.status, text.slice(0, 200));
     throw new HttpError(502, "upstream_error", "The AI provider is unavailable");
   }
   return response.body;

@@ -10,6 +10,7 @@ import SwiftUI
 struct SettingsView: View {
   // AI Configuration - hosted by default; BYOK keys are stored in Keychain
   @State private var aiMode: AIMode = AIMode.current
+  @State private var modelDisclosure: String?
   @State private var apiKey: String = ""
   @AppStorage("ai_base_url") private var baseURL: String = AIDefaults.baseURL
   @AppStorage("ai_model") private var model: String = AIDefaults.model
@@ -90,9 +91,14 @@ struct SettingsView: View {
           Text("AI Service", comment: "Section header")
         } footer: {
           if aiMode == .hosted {
-            Text(
-              "Works out of the box. Shared translations and summaries are served from the HNEveryDay cache; new summaries and article translations count toward a daily allowance.",
-              comment: "Hosted mode explanation")
+            VStack(alignment: .leading, spacing: 6) {
+              Text(
+                "Works out of the box. Shared translations and summaries are served from the HNEveryDay cache; new summaries and article translations count toward a daily allowance.",
+                comment: "Hosted mode explanation")
+              if let modelDisclosure {
+                Text(modelDisclosure)
+              }
+            }
           } else {
             Text(
               "Advanced: requests go directly to your own provider with your key. Nothing passes through HNEveryDay servers and there are no daily limits.",
@@ -234,6 +240,9 @@ struct SettingsView: View {
         }
       }
       .navigationTitle(Text("Settings", comment: "Page title"))
+      .task {
+        modelDisclosure = await RemoteConfigStore.shared.current().model_disclosure
+      }
       .toolbar {
         ToolbarItem(placement: .topBarTrailing) {
           Button("Done") {

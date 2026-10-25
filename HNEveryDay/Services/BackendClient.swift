@@ -135,10 +135,32 @@ actor BackendClient {
       )
     case "slow_down":
       return .slowDown(retryAfter: body.retry_after ?? 60)
+    case "content_blocked":
+      return .contentBlocked
     case "feature_disabled", "budget_exhausted", "region_unavailable", "upgrade_required":
       return .unavailable(code: body.code, message: body.message)
     default:
       return .requestFailed(status: status, message: body.message)
     }
+  }
+}
+
+nonisolated private struct ReportRequest: Encodable, Sendable {
+  let story_id: Int
+  let kind: String
+  let reason: String
+}
+
+nonisolated private struct ReportResponse: Decodable, Sendable {
+  let ok: Bool
+}
+
+extension BackendClient {
+  /// Flags hosted AI output ("title", "summary", "article", "agent") for moderation. Best effort.
+  func report(storyId: Int, kind: String, reason: String) async {
+    let _: ReportResponse? = try? await post(
+      "/api/v1/report",
+      body: ReportRequest(story_id: storyId, kind: kind, reason: String(reason.prefix(1000)))
+    )
   }
 }

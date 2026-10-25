@@ -28,7 +28,7 @@ describe("config", () => {
   it("serves defaults and merges KV overrides", async () => {
     const defaults = (await (await call("/api/v1/config")).json()) as ReturnType<typeof defaultConfig>;
     expect(defaults.features.agent).toBe(true);
-    expect(defaults.disabled_countries).toContain("CN");
+    expect(defaults.disabled_countries).toEqual([]);
     expect(defaults.products).toEqual(["pro.monthly", "pro.annual"]);
 
     await E.CONFIG.put("config", JSON.stringify({ features: { agent: false }, quotas: { free: { summary: 1 } } }));
@@ -51,7 +51,8 @@ describe("config", () => {
       new Request("https://api.test", { headers, ...(country ? { cf: { country } } : {}) } as RequestInit);
     expect(() => assertFeatureEnabled(config, "summary", req())).not.toThrow();
     expect(() => assertFeatureEnabled(config, "summary", req({ "x-app-version": "1.1.0" }))).toThrow(HttpError);
-    expect(() => assertFeatureEnabled(config, "summary", req({}, "CN"))).toThrow(/region/);
+    expect(() => assertFeatureEnabled(config, "summary", req({}, "CN"))).not.toThrow();
+    expect(() => assertFeatureEnabled({ ...config, disabled_countries: ["CN"] }, "summary", req({}, "CN"))).toThrow(/region/);
     expect(() =>
       assertFeatureEnabled({ ...config, features: { ...config.features, hosted_ai: false } }, "summary", req()),
     ).toThrow(/unavailable/);
@@ -182,6 +183,18 @@ describe("summary", () => {
     const failed = await call("/api/v1/summary", { token: other.token, body: { story_id: storyId(), lang: "en" } });
     expect(failed.status).toBe(502);
     const me = (await (await call("/api/v1/me", { token: other.token })).json()) as { quotas: { summary: { used: number } } };
+    expect(me.quotas.summary.used).toBe(0);
+  });
+});
+
+describe("content safety", () => {
+  it("maps the provider's content-risk rejection to content_blocked and refunds quota", async () => {
+    mockUpstream(() => Response.json({ error: { message: "Content Exists Risk" } }, { status: 400 }));
+    const { token } = await attestedToken();
+    const blocked = await call("/api/v1/summary", { token, body: { story_id: storyId(), lang: "zh-Hans" } });
+    expect(blocked.status).toBe(422);
+    expect(((await blocked.json()) as { error: { code: string } }).error.code).toBe("content_blocked");
+    const me = (await (await call("/api/v1/me", { token })).json()) as { quotas: { summary: { used: number } } };
     expect(me.quotas.summary.used).toBe(0);
   });
 });

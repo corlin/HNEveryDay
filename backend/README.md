@@ -52,8 +52,10 @@ npm run deploy
 ```sh
 # 关闭 Agent
 npx wrangler kv key put --binding CONFIG config '{"features":{"agent":false}}' --remote
-# 开放中国区托管 AI（确认备案后）
-npx wrangler kv key put --binding CONFIG config '{"disabled_countries":[]}' --remote
+# 中国区备案/登记号拿到后，写入设置页的模型披露信息
+npx wrangler kv key put --binding CONFIG config '{"model_disclosure":"本应用 AI 服务基于 DeepSeek 大模型（备案号：…）"}' --remote
+# 应急：按地区关闭托管 AI（cf.country，两位码），并按 App Store 店面隐藏付费墙（三位码）
+npx wrangler kv key put --binding CONFIG config '{"disabled_countries":["CN"],"disabled_storefronts":["CHN"]}' --remote
 # 调整免费额度
 npx wrangler kv key put --binding CONFIG config '{"quotas":{"free":{"summary":20}}}' --remote
 ```

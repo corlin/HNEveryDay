@@ -67,6 +67,7 @@ struct StoryRowView: View {
           Image(systemName: "sparkles")
             .font(.system(size: 11, weight: .semibold))
             .foregroundStyle(.orange)
+            .accessibilityLabel(Text("AI translation", comment: "Explicit label on machine-translated articles"))
         }
 
         Text(displayTitle)

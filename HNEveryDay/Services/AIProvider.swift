@@ -36,6 +36,8 @@ nonisolated enum AIServiceError: LocalizedError, Sendable {
   case slowDown(retryAfter: Int)
   /// The hosted service is switched off, over budget, unavailable in this region, or needs an app update.
   case unavailable(code: String, message: String)
+  /// The model provider's content-safety filter rejected this content. Not retried with BYOK.
+  case contentBlocked
   case requestFailed(status: Int, message: String)
 
   var errorDescription: String? {
@@ -55,6 +57,8 @@ nonisolated enum AIServiceError: LocalizedError, Sendable {
       default:
         return String(localized: "AI is temporarily unavailable. Showing the original text.")
       }
+    case .contentBlocked:
+      return String(localized: "This content can't be processed by the AI service.")
     case .requestFailed(_, let message):
       return message
     }

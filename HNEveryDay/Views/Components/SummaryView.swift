@@ -20,6 +20,7 @@ struct SummaryView: View {
   @State private var errorMsg: String?
   @State private var quotaKind: String?
   @State private var showPaywall = false
+  @State private var reported = false
 
   init(
     item: HNItem,
@@ -63,7 +64,7 @@ struct SummaryView: View {
       .toolbar {
         ToolbarItem(placement: .topBarTrailing) {
           if !isLoading {
-            ShareLink(item: summaryText)
+            ShareLink(item: AIContentLabel.labeled(summaryText))
           }
         }
       }
@@ -193,7 +194,21 @@ struct SummaryView: View {
   }
 
   private var summaryCard: some View {
-    MarkdownContentView(content: summaryText)
+    VStack(alignment: .leading, spacing: 10) {
+      MarkdownContentView(content: summaryText)
+      HStack(spacing: 12) {
+        AIContentLabel()
+        if AIMode.current == .hosted {
+          Button(reported ? "Reported" : "Report") {
+            reported = true
+            Task { await BackendClient.shared.report(storyId: item.id, kind: "summary", reason: summaryText) }
+          }
+          .disabled(reported)
+        }
+      }
+      .font(.caption2)
+      .foregroundStyle(.secondary)
+    }
       .padding(.horizontal, 14)
       .padding(.vertical, 14)
       .frame(maxWidth: .infinity, alignment: .leading)

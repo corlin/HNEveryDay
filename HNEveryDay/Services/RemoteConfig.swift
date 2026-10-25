@@ -30,6 +30,10 @@ nonisolated struct RemoteConfig: Codable, Sendable {
   var quotas: [String: TierQuotas]
   var products: [String]
   var notice: String?
+  /// App Store storefronts (alpha-3) where the paywall is hidden. Optional so older cached configs still decode.
+  var disabled_storefronts: [String]? = nil
+  /// Model filing / registration line shown in Settings where regulation requires it.
+  var model_disclosure: String? = nil
 
   static let fallback = RemoteConfig(
     features: Features(hosted_ai: true, summary: true, article_translation: true, agent: true, paywall: true),

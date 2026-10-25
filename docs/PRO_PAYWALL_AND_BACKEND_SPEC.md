@@ -368,7 +368,9 @@ event: error  data: {"code": "upstream_error", "message": "..."}
   * `features`: `hosted_ai`、`summary`、`article_translation`、`agent`、`paywall` 开关；
   * `min_app_version`：低于该版本时托管 AI 关闭并提示更新；
   * `quotas`：各层级额度；
-  * `disabled_countries`：按 `request.cf.country` 关闭托管生成式功能的地区；客户端另按 `Storefront.current.countryCode` 隐藏付费墙；
+  * `disabled_countries`：按 `request.cf.country` 关闭托管生成式功能的地区（默认空）；
+  * `disabled_storefronts`：客户端按 `Storefront.current.countryCode`（三位码）隐藏付费墙的店面（默认空）；
+  * `model_disclosure`：设置页展示的模型备案/登记信息（默认空，拿到编号后写入）；
   * `products`：Pro 产品 ID。
 * **降级**：托管请求超时 / 503 / 功能关闭时，不弹阻断式错误，显示轻提示“AI 暂不可用，已为你展示原文”；标题保持英文；BYOK 用户不受影响。
 * **离线**：读取 SwiftData 本地缓存。
@@ -381,7 +383,17 @@ event: error  data: {"code": "upstream_error", "message": "..."}
 
 > 以下为风险提示，具体要求以专业法律意见为准。
 
-1. **中国区**：托管模式属于开发者向公众提供生成式 AI 服务，可能需要依《生成式人工智能服务管理暂行办法》备案或登记，Apple 中国区审核也可能要求相关证明。**在得到明确结论前，默认 `disabled_countries = ["CN"]`**：中国区用户继续使用 BYOK 模式，托管 AI 与付费墙在该地区关闭。确认可上架后，只需修改远程配置。
+1. **中国区（已决定开放，2026-10-25）**：中国区与其他地区一样提供托管 AI 与 Pro，托管模型固定为国内 DeepSeek（已备案的大模型，经其官方 API 调用）。代码侧已完成：
+   * 默认 `disabled_countries = []`；需要时仍可按地区用远程配置紧急关闭（`disabled_countries` / `disabled_storefronts`）。
+   * **显式标识**（《人工智能生成合成内容标识办法》，2025-09-01 起施行）：摘要、Agent 回答旁显示“AI 生成，可能有误”，全文译文标注“AI 翻译”，标题译文有标识图标与无障碍标签；复制、分享出去的文本末尾附“本内容由 AI 生成 · HNEveryDay”。
+   * **内容安全**：DeepSeek 内容审核拒绝（HTTP 400 “Content Exists Risk”）映射为 `422 content_blocked`，退还额度，客户端提示且**不**回退到 BYOK 重试；托管模式下摘要与 Agent 回答均有举报入口，管理员可按 story 下线（返回 451）。
+   * **信息披露**：设置页展示远程配置的 `model_disclosure`（模型名称与备案/登记号）；隐私政策写明处理方、境内外位置与标识/举报机制。
+
+   上架前需要开发者（非代码）完成，具体以专业意见为准：
+   * **App 备案（ICP）**：App Store 中国大陆店面要求在 App Store Connect 填写 ICP 备案号。
+   * **生成式 AI 服务登记**：通过 API 调用已备案模型面向公众提供服务的应用，通常需向属地网信办办理“已备案模型调用登记”，拿到编号后写入 `model_disclosure`；Apple 中国区审核可能要求提供该证明。
+   * **用户协议与投诉渠道**：补充用户服务协议（禁止用途、内容责任），提供公开的投诉举报联系方式并按时处理。
+   * **跨境数据**：Worker 运行在 Cloudflare 全球网络，中国用户请求可能经境外节点再转发到 DeepSeek。当前只传文章摘录与提问、不含个人身份信息，风险较低；若监管或审核要求数据境内处理，可为中国区单独部署境内转发服务（例如阿里云函数计算），客户端按地区切换 Base URL。
 2. **数据流向与隐私标签**：托管模式下，文章摘录与 Agent 提问经 Cloudflare 发往模型服务商（DeepSeek）。隐私政策与 App Store 隐私标签需写明第三方处理方与用途；**服务端不存储 Agent 对话**；设备令牌为匿名标识，不关联 Apple ID 以外的个人信息。
 3. **宪章**：`.specify/memory/constitution.md` 升级到 v2.0.0：托管后端与托管模型服务商列为批准处理方；BYOK 的密钥仍须存钥匙串。
 4. **版权**：服务端只缓存标题翻译与摘要，不缓存全文译文；所有 AI 内容附原文链接。
@@ -446,6 +458,6 @@ event: error  data: {"code": "upstream_error", "message": "..."}
 
 ## 十三、 待决问题
 
-1. **是否上架中国区托管 AI**：默认关闭（见第十章），确认后改远程配置即可，不影响代码。
+1. ~~是否上架中国区托管 AI~~：已决定开放，模型绑定国内 DeepSeek（见第十章）；剩余为备案/登记等非代码事项。
 2. **托管模型**：默认 DeepSeek（OpenAI 兼容接口），模型名由 `LLM_MODEL` 配置；更换模型会使缓存按版本失效。
 3. **额度数字**：首发使用第三章默认值，阶段 1 门槛数据出来后调整。

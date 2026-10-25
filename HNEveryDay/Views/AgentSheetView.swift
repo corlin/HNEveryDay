@@ -130,7 +130,7 @@ struct AgentSheetView: View {
         }
         if !message.text.isEmpty && !(model.isStreaming && message.id == model.messages.last?.id) {
           HStack(spacing: 12) {
-            Text("AI-generated, may be inaccurate")
+            AIContentLabel()
             if AIMode.current == .hosted {
               Button(reportedIds.contains(message.id) ? "Reported" : "Report") {
                 reportedIds.insert(message.id)
@@ -149,11 +149,11 @@ struct AgentSheetView: View {
       .clipShape(RoundedRectangle(cornerRadius: 12))
       .contextMenu {
         Button {
-          UIPasteboard.general.string = message.text
+          UIPasteboard.general.string = AIContentLabel.labeled(message.text)
         } label: {
           Label("Copy", systemImage: "doc.on.doc")
         }
-        ShareLink(item: message.text)
+        ShareLink(item: AIContentLabel.labeled(message.text))
       }
     }
   }

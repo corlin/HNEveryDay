@@ -19,6 +19,10 @@ export interface RemoteConfig {
   features: Record<Feature, boolean>;
   min_app_version: string;
   disabled_countries: string[];
+  /** App Store storefronts (ISO 3166-1 alpha-3) where the client hides the paywall. */
+  disabled_storefronts: string[];
+  /** Model filing / registration line shown in Settings where regulation requires it (e.g. mainland China). */
+  model_disclosure: string | null;
   quotas: Record<Tier, TierQuotas>;
   /** Quota multiplier for devices without App Attest (anonymous tokens). */
   anonymous_quota_factor: number;
@@ -31,8 +35,10 @@ export function defaultConfig(env: Env): RemoteConfig {
   return {
     features: { hosted_ai: true, summary: true, article_translation: true, agent: true, paywall: true },
     min_app_version: "1.2.0",
-    // Hosted generative AI stays off in mainland China until the filing question is settled (spec §10).
-    disabled_countries: ["CN"],
+    // Mainland China is served too, backed by DeepSeek (spec §10); regions can still be switched off from KV.
+    disabled_countries: [],
+    disabled_storefronts: [],
+    model_disclosure: null,
     quotas: {
       free: { summary: 10, article: 3, agent: 3, agent_soft: 3 },
       pro: { summary: 200, article: 50, agent: 200, agent_soft: 50 },

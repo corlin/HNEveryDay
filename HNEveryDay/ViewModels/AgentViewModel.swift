@@ -30,16 +30,6 @@ struct AgentChip: Identifiable, Hashable {
   ]
 }
 
-nonisolated private struct AgentReportRequest: Encodable, Sendable {
-  let story_id: Int
-  let kind: String
-  let reason: String
-}
-
-nonisolated private struct AgentReportResponse: Decodable, Sendable {
-  let ok: Bool
-}
-
 @MainActor
 @Observable
 final class AgentViewModel {
@@ -134,9 +124,6 @@ final class AgentViewModel {
 
   /// Reports an AI answer for review (hosted mode only).
   func report(_ message: AgentMessage) async {
-    let _: AgentReportResponse? = try? await BackendClient.shared.post(
-      "/api/v1/report",
-      body: AgentReportRequest(story_id: context.storyId, kind: "agent", reason: String(message.text.prefix(1000)))
-    )
+    await BackendClient.shared.report(storyId: context.storyId, kind: "agent", reason: message.text)
   }
 }

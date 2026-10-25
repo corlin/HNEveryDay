@@ -57,7 +57,7 @@ final class StoreManager {
   private(set) var hasActiveEntitlement = false
   private(set) var account: AccountStatus?
   private(set) var isLoadingProducts = false
-  /// Pro is not offered where hosted AI is unavailable (see RemoteConfig.disabled_countries).
+  /// Pro is not offered where the backend says so (RemoteConfig.disabled_storefronts).
   private(set) var isPaywallAvailable = true
 
   @ObservationIgnored private var updatesTask: Task<Void, Never>?
@@ -94,7 +94,8 @@ final class StoreManager {
   func refreshAvailability() async {
     let config = await RemoteConfigStore.shared.current()
     let storefront = await Storefront.current?.countryCode
-    isPaywallAvailable = config.features.paywall && config.features.hosted_ai && storefront != "CHN"
+    let storefrontDisabled = storefront.map { (config.disabled_storefronts ?? []).contains($0) } ?? false
+    isPaywallAvailable = config.features.paywall && config.features.hosted_ai && !storefrontDisabled
   }
 
   func loadProducts() async {

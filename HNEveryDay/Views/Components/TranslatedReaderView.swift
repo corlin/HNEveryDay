@@ -29,6 +29,10 @@ struct TranslatedReaderView: View {
               .fill(Color.secondary.opacity(0.45))
               .frame(width: 3, height: 3)
             Text(ReadingLanguage.displayName(for: targetLanguage))
+            Circle()
+              .fill(Color.secondary.opacity(0.45))
+              .frame(width: 3, height: 3)
+            Text("AI translation", comment: "Explicit label on machine-translated articles")
           }
           .font(.system(size: 11, weight: .medium))
           .fontDesign(.monospaced)

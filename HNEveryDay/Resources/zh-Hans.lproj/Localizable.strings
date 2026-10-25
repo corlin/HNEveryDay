@@ -163,6 +163,9 @@
 "When does this fit, and when not?" = "这项技术适用和不适用的场景";
 "Today %lld/%lld" = "今日 %lld/%lld";
 "AI-generated, may be inaccurate" = "AI 生成，可能有误";
+"AI-generated content · HNEveryDay" = "本内容由 AI 生成 · HNEveryDay";
+"AI translation" = "AI 翻译";
+"This content can't be processed by the AI service." = "该内容无法由 AI 服务处理。";
 "Report" = "举报";
 "Reported" = "已举报";
 "Copy" = "复制";
