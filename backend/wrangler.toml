@@ -4,7 +4,7 @@ compatibility_date = "2026-10-01"
 compatibility_flags = ["nodejs_compat"]
 
 [vars]
-APP_TEAM_ID = "REPLACE_WITH_TEAM_ID"
+APP_TEAM_ID = "5M726V7N7X"
 APP_BUNDLE_ID = "cn.corlin.hneveryday.HNEveryDay"
 # off | soft | enforce  (see docs/PRO_PAYWALL_AND_BACKEND_SPEC.md §7)
 ATTEST_MODE = "soft"

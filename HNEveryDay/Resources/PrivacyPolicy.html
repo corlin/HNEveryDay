@@ -68,7 +68,7 @@
     <!-- Chinese Content -->
     <div class="zh-content">
         <h1>隐私政策</h1>
-        <p><strong>生效日期：</strong> 2026年1月5日</p>
+        <p><strong>生效日期：</strong> 2026年10月25日</p>
 
         <p>欢迎使用“HNEveryDay”（以下简称“本应用”）。不仅我们致力于为您提供优质的服务，更非常重视您的隐私保护。本《隐私政策》将向您说明我们在您使用服务时如何收集、使用、存储和保护您的个人信息，以及您享有的权利。
         </p>
@@ -85,6 +85,14 @@
                     本应用可能会在您的设备本地存储您的浏览历史、收藏（书签）等数据，以便为您提供更好的用户体验。这些数据仅存储在您的设备及其关联的 iCloud 账户中，我们不会将其上传至其他服务器。</li>
                 <li><strong>网页浏览：</strong>
                     当您点击信息链接时，本应用会通过内置浏览器（WebView）加载第三方网页。第三方网站可能会使用 Cookies 或收集您的访问信息，请您参考该第三方网站的隐私政策。</li>
+                <li><strong>AI 功能（托管模式，默认）：</strong>
+                    使用标题翻译、摘要、全文翻译或 Agent 时，相关文章标识、您设备上提取的正文摘录以及您输入的问题会发送到 HNEveryDay 服务器（运行于 Cloudflare），再由服务器转发给模型服务商（DeepSeek）生成结果。标题翻译与摘要会作为公共内容缓存在服务器上；全文译文和 Agent 对话<strong>不会</strong>在服务器上保存。</li>
+                <li><strong>匿名设备标识：</strong>
+                    为防止滥用并计算每日额度，应用会通过 Apple App Attest 生成一个与您身份无关的匿名设备标识。我们不收集姓名、邮箱、Apple ID 或广告标识符。</li>
+                <li><strong>订阅：</strong>
+                    购买 Pro 时，Apple 提供的签名交易信息（交易编号、产品、到期时间）会发送到我们的服务器用于确认权益。我们无法获得您的支付信息。</li>
+                <li><strong>自带 API Key（高级模式）：</strong>
+                    选择此模式后，AI 请求直接从您的设备发送到您配置的服务商，不经过 HNEveryDay 服务器；API Key 仅保存在设备钥匙串中。</li>
             </ul>
         </div>
 
@@ -98,7 +106,7 @@
 
         <div class="section">
             <h2>3. 信息共享、转让和公开披露</h2>
-            <p>我们不会主动共享、转让或公开披露您的个人信息。本应用作为客户端工具，主要连接 Hacker News 公共 API，不存在用户账号注册系统，因此我们不持有您的个人身份信息。</p>
+            <p>我们不会出售或公开披露您的个人信息。本应用没有账号注册系统，我们不持有您的个人身份信息。为提供 AI 功能，第 1 节所述数据会交由以下处理方：Cloudflare（服务器托管）、DeepSeek（模型推理）、Apple（购买与设备校验）。服务器日志与使用计数最多保留 90 天。</p>
         </div>
 
         <div class="section">
@@ -126,7 +134,7 @@
     <!-- English Content -->
     <div class="en-content">
         <h1>Privacy Policy</h1>
-        <p><strong>Effective Date:</strong> January 5, 2026</p>
+        <p><strong>Effective Date:</strong> October 25, 2026</p>
 
         <p>Welcome to use "HNEveryDay" (hereinafter referred to as "the App"). We are committed to providing
             you with high-quality services and attach great importance to protecting your privacy. This Privacy Policy
@@ -154,6 +162,22 @@
                     When you click on a news link, the App loads third-party webpages via the built-in browser
                     (WebView). Third-party websites may use Cookies or collect your visit information; please refer to
                     the privacy policies of those third-party websites.</li>
+                <li><strong>AI features (hosted mode, default):</strong>
+                    When you use title translation, summaries, article translation or the Agent, the story id, an
+                    article excerpt extracted on your device and the questions you type are sent to the HNEveryDay
+                    server (running on Cloudflare), which forwards them to the model provider (DeepSeek). Title
+                    translations and summaries are cached on the server as shared content; article translations and
+                    Agent conversations are <strong>not</strong> stored on the server.</li>
+                <li><strong>Anonymous device identifier:</strong>
+                    To prevent abuse and count daily allowances, the App creates an anonymous device identifier with
+                    Apple App Attest. It is not linked to your identity. We do not collect names, email addresses,
+                    Apple IDs or advertising identifiers.</li>
+                <li><strong>Subscriptions:</strong>
+                    When you buy Pro, the signed transaction provided by Apple (transaction id, product, expiry) is
+                    sent to our server to confirm your access. We never receive your payment details.</li>
+                <li><strong>Own API key (advanced mode):</strong>
+                    In this mode AI requests go directly from your device to the provider you configured and do not
+                    pass through HNEveryDay servers; your API key stays in the device Keychain.</li>
             </ul>
         </div>
 
@@ -167,9 +191,10 @@
 
         <div class="section">
             <h2>3. Sharing, Transfer, and Public Disclosure</h2>
-            <p>We do not actively share, transfer, or publicly disclose your personal information. As a client tool
-                connecting to the Hacker News public API, the App does not have a user account registration system, and
-                thus we do not hold your personal identity information.</p>
+            <p>We do not sell or publicly disclose your personal information. The App has no account registration,
+                so we do not hold your personal identity information. To provide AI features, the data described in
+                section 1 is processed by: Cloudflare (server hosting), DeepSeek (model inference) and Apple (purchases
+                and device attestation). Server logs and usage counters are kept for at most 90 days.</p>
         </div>
 
         <div class="section">

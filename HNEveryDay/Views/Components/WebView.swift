@@ -21,8 +21,11 @@ struct WebView: UIViewRepresentable {
 
   func updateUIView(_ uiView: WKWebView, context: Context) {
     if uiView.url != url {
-      let request = URLRequest(url: url)
-      uiView.load(request)
+      if url.isFileURL {
+        uiView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
+      } else {
+        uiView.load(URLRequest(url: url))
+      }
     }
   }
 }

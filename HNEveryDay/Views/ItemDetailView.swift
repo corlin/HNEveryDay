@@ -479,6 +479,7 @@ struct ItemDetailView: View {
 
     do {
       let result = try await AIService.shared.translateArticle(
+        storyId: item.id,
         title: article.title ?? item.title ?? "Untitled",
         articleText: articleText,
         targetLanguage: targetLanguage

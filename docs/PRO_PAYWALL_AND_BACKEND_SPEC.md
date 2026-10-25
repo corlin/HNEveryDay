@@ -423,9 +423,9 @@ event: error  data: {"code": "upstream_error", "message": "..."}
 - **门槛**：线上 2 周数据显示缓存命中率达标、P95 可接受、日成本在预算内。
 
 ### 阶段 2：客户端接入托管后端
-- [ ] Provider 抽象，BYOK 保留为高级模式，老用户迁移规则
-- [ ] DeviceAuth（App Attest + 匿名回退）、BackendClient、RemoteConfig
-- [ ] 设置页重构；降级提示
+- [x] Provider 抽象，BYOK 保留为高级模式，老用户迁移规则
+- [x] DeviceAuth（App Attest + 匿名回退）、BackendClient、RemoteConfig
+- [x] 设置页重构；降级提示
 - **门槛**：托管与 BYOK 双模式回归通过；后端故障时 App 正常阅读。
 
 ### 阶段 3：StoreKit 2 付费墙

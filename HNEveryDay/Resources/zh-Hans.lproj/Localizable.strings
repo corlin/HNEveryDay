@@ -94,3 +94,20 @@
 "Get the gist of article + discussion in seconds." = "秒级获取文章与讨论的核心要点。";
 "Knowledge Export" = "知识导出";
 "One-tap Markdown export for Obsidian/Notion." = "一键导出 Markdown，适配 Obsidian/Notion。";
+
+/* AI Service (hosted / BYOK) */
+"AI Service" = "AI 服务";
+"Hosted" = "托管";
+"Own API Key" = "自带 Key";
+"Works out of the box. Shared translations and summaries are served from the HNEveryDay cache; new summaries and article translations count toward a daily allowance." = "开箱即用。公共的标题翻译和摘要直接来自 HNEveryDay 缓存；新生成的摘要和全文翻译计入每日额度。";
+"Advanced: requests go directly to your own provider with your key. Nothing passes through HNEveryDay servers and there are no daily limits." = "高级模式：请求用你自己的 Key 直连你配置的服务商，不经过 HNEveryDay 服务器，也没有每日额度限制。";
+"Translations are cached locally with read articles." = "翻译结果会随已读文章缓存在本地。";
+"Please check your network connection and try again." = "请检查网络连接后重试。";
+"API Key is missing. Please configure it in Settings." = "尚未配置 API Key，请在设置中填写，或切换到托管模式。";
+"You've reached today's free limit. Upgrade to Pro or try again tomorrow." = "今天的免费额度已用完。升级 Pro 或明天再试。";
+"You're going fast. Please wait %lld seconds and try again." = "请求有点频繁，请 %lld 秒后再试。";
+"Please update the app to keep using AI features." = "请更新 App 以继续使用 AI 功能。";
+"Hosted AI is not available in your region. You can use your own API key in Settings." = "你所在的地区暂不提供托管 AI，可以在设置中使用自己的 API Key。";
+"AI is temporarily unavailable. Showing the original text." = "AI 暂时不可用，已为你展示原文。";
+"Privacy Policy" = "隐私政策";
+"Terms of Use" = "使用条款";

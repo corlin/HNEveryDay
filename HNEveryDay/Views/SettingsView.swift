@@ -8,7 +8,8 @@
 import SwiftUI
 
 struct SettingsView: View {
-  // AI Configuration - API Key stored in Keychain
+  // AI Configuration - hosted by default; BYOK keys are stored in Keychain
+  @State private var aiMode: AIMode = AIMode.current
   @State private var apiKey: String = ""
   @AppStorage("ai_base_url") private var baseURL: String = AIDefaults.baseURL
   @AppStorage("ai_model") private var model: String = AIDefaults.model
@@ -25,7 +26,7 @@ struct SettingsView: View {
   }
 
   // Provider Preset Logic
-  enum AIProvider: String, CaseIterable, Identifiable {
+  enum ProviderPreset: String, CaseIterable, Identifiable {
     case openai = "OpenAI"
     case deepseek = "DeepSeek"
     case qwen = "Qwen (Aliyun)"
@@ -65,86 +66,112 @@ struct SettingsView: View {
     }
   }
 
-  @State private var selectedProvider: AIProvider = .deepseek
+  @State private var selectedProvider: ProviderPreset = .deepseek
 
   var body: some View {
     NavigationStack {
       Form {
-        // MARK: - Provider Picker
+        // MARK: - AI Service
         Section {
-          Picker("Provider Preset", selection: $selectedProvider) {
-            ForEach(AIProvider.allCases) { provider in
-              Text(provider.rawValue).tag(provider)
-            }
+          Picker("AI Service", selection: $aiMode) {
+            Text("Hosted", comment: "Hosted AI mode").tag(AIMode.hosted)
+            Text("Own API Key", comment: "Bring your own key mode").tag(AIMode.byok)
           }
-          .onChange(of: selectedProvider) { _, newValue in
-            if newValue != .custom {
-              baseURL = newValue.defaultBaseURL
-              model = newValue.defaultModel
-            }
+          .pickerStyle(.segmented)
+          .onChange(of: aiMode) { _, newValue in
+            UserDefaults.standard.set(newValue.rawValue, forKey: AIMode.defaultsKey)
           }
         } header: {
-          Text("Quick Setup", comment: "Section header")
-        }
-
-        // MARK: - Credentials
-        Section {
-          SecureField("sk-...", text: $apiKey)
-            .onChange(of: apiKey) { _, newValue in
-              _ = KeychainHelper.save(key: "ai_api_key", value: newValue)
-            }
-        } header: {
-          Text("API Key", comment: "Section header")
+          Text("AI Service", comment: "Section header")
         } footer: {
-          Text("Your key is stored securely in Keychain.", comment: "Security note")
+          if aiMode == .hosted {
+            Text(
+              "Works out of the box. Shared translations and summaries are served from the HNEveryDay cache; new summaries and article translations count toward a daily allowance.",
+              comment: "Hosted mode explanation")
+          } else {
+            Text(
+              "Advanced: requests go directly to your own provider with your key. Nothing passes through HNEveryDay servers and there are no daily limits.",
+              comment: "BYOK mode explanation")
+          }
         }
 
-        // MARK: - Advanced Config
-        Section("Configuration") {
-          TextField("Base URL", text: $baseURL)
-            .keyboardType(.URL)
-            .autocorrectionDisabled()
-            .textInputAutocapitalization(.never)
-
-          VStack(alignment: .leading, spacing: 4) {
-            HStack {
-              TextField("Model Name", text: $model)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-
-              // Suggestions Menu
-              if !selectedProvider.suggestedModels.isEmpty {
-                Menu {
-                  ForEach(selectedProvider.suggestedModels, id: \.self) { suggestion in
-                    Button(suggestion) {
-                      model = suggestion
-                    }
-                  }
-                } label: {
-                  Image(systemName: "chevron.up.chevron.down")
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 4)
-                    .background(Color.secondary.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                }
+        if aiMode == .byok {
+          // MARK: - Provider Picker
+          Section {
+            Picker("Provider Preset", selection: $selectedProvider) {
+              ForEach(ProviderPreset.allCases) { provider in
+                Text(provider.rawValue).tag(provider)
               }
             }
+            .onChange(of: selectedProvider) { _, newValue in
+              if newValue != .custom {
+                baseURL = newValue.defaultBaseURL
+                model = newValue.defaultModel
+              }
+            }
+          } header: {
+            Text("Quick Setup", comment: "Section header")
+          }
 
-            if selectedProvider == .doubao {
-              Text("Note: For Doubao, enter your Endpoint ID (e.g., ep-2024...) here.")
-                .font(.caption2)
-                .foregroundStyle(.orange)
+          // MARK: - Credentials
+          Section {
+            SecureField("sk-...", text: $apiKey)
+              .onChange(of: apiKey) { _, newValue in
+                _ = KeychainHelper.save(key: "ai_api_key", value: newValue)
+              }
+          } header: {
+            Text("API Key", comment: "Section header")
+          } footer: {
+            Text("Your key is stored securely in Keychain.", comment: "Security note")
+          }
+
+          // MARK: - Advanced Config
+          Section("Configuration") {
+            TextField("Base URL", text: $baseURL)
+              .keyboardType(.URL)
+              .autocorrectionDisabled()
+              .textInputAutocapitalization(.never)
+
+            VStack(alignment: .leading, spacing: 4) {
+              HStack {
+                TextField("Model Name", text: $model)
+                  .autocorrectionDisabled()
+                  .textInputAutocapitalization(.never)
+
+                // Suggestions Menu
+                if !selectedProvider.suggestedModels.isEmpty {
+                  Menu {
+                    ForEach(selectedProvider.suggestedModels, id: \.self) { suggestion in
+                      Button(suggestion) {
+                        model = suggestion
+                      }
+                    }
+                  } label: {
+                    Image(systemName: "chevron.up.chevron.down")
+                      .foregroundStyle(.secondary)
+                      .padding(.horizontal, 4)
+                      .background(Color.secondary.opacity(0.1))
+                      .clipShape(RoundedRectangle(cornerRadius: 6))
+                  }
+                }
+              }
+
+              if selectedProvider == .doubao {
+                Text("Note: For Doubao, enter your Endpoint ID (e.g., ep-2024...) here.")
+                  .font(.caption2)
+                  .foregroundStyle(.orange)
+              }
             }
           }
-        }
 
-        if selectedProvider == .custom {
-          Section {
-            Text(
-              "Supports any OpenAI-compatible server (e.g. Ollama, LM Studio). Set Base URL to 'http://localhost:11434/v1' for Ollama."
-            )
-            .font(.caption)
-            .foregroundStyle(.secondary)
+          if selectedProvider == .custom {
+            Section {
+              Text(
+                "Supports any OpenAI-compatible server (e.g. Ollama, LM Studio). Set Base URL to 'http://localhost:11434/v1' for Ollama."
+              )
+              .font(.caption)
+              .foregroundStyle(.secondary)
+            }
           }
         }
 
@@ -171,13 +198,26 @@ struct SettingsView: View {
           Text("General", comment: "Section header")
         } footer: {
           Text(
-            "Translations use your configured AI provider and are cached locally with read articles.",
+            "Translations are cached locally with read articles.",
             comment: "Translation explanation")
         }
 
         // MARK: - About
         Section("About") {
           LabeledContent("Version", value: appVersion)
+          NavigationLink {
+            LegalLinks.privacyPolicyView
+          } label: {
+            Text("Privacy Policy")
+          }
+          Link(destination: LegalLinks.termsOfUse) {
+            HStack {
+              Text("Terms of Use")
+              Spacer()
+              Image(systemName: "arrow.up.right.square")
+                .foregroundStyle(.secondary)
+            }
+          }
           Link(destination: URL(string: "https://github.com/corlin/HNEveryDay")!) {
             HStack {
               Text("GitHub")
@@ -202,7 +242,7 @@ struct SettingsView: View {
       apiKey = KeychainHelper.read(key: "ai_api_key") ?? ""
 
       // Detect provider from URL
-      if let match = AIProvider.allCases.first(where: {
+      if let match = ProviderPreset.allCases.first(where: {
         baseURL.contains($0.defaultBaseURL) && $0 != .custom
       }) {
         selectedProvider = match

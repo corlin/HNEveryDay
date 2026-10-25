@@ -153,7 +153,7 @@ struct SummaryView: View {
         .font(.caption)
         .fixedSize(horizontal: false, vertical: true)
 
-      Text("Please check your API Key and Network settings.", comment: "Error suggestion")
+      Text(errorSuggestion)
         .font(.caption2)
         .foregroundStyle(.secondary)
     }
@@ -166,6 +166,12 @@ struct SummaryView: View {
       RoundedRectangle(cornerRadius: 8)
         .strokeBorder(Color.orange.opacity(0.24), lineWidth: 1)
     )
+  }
+
+  private var errorSuggestion: LocalizedStringKey {
+    AIMode.current == .byok
+      ? "Please check your API Key and Network settings."
+      : "Please check your network connection and try again."
   }
 
   private var summaryCard: some View {
@@ -200,6 +206,7 @@ struct SummaryView: View {
 
     do {
       let result = try await AIService.shared.summarize(
+        storyId: item.id,
         title: item.title ?? "Unknown",
         url: item.url,
         articleContent: article?.textContent,

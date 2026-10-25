@@ -142,78 +142,62 @@ final class AIService: Sendable {
   typealias TitleTranslationInput = AITitleTranslationInput
   typealias TitleTranslationBatchResponse = AITitleTranslationBatchResponse
 
-  // Core Logic
-  func summarize(title: String, url: String?, articleContent: String?, comments: [String])
-    async throws -> String
-  {
-    let apiKey = KeychainHelper.read(key: "ai_api_key") ?? ""
-    let baseUrl = UserDefaults.standard.string(forKey: "ai_base_url") ?? AIDefaults.baseURL
-    let model = UserDefaults.standard.string(forKey: "ai_model") ?? AIDefaults.model
-    let preferredLang = UserDefaults.standard.string(forKey: "preferred_language") ?? "system"
+  private let hosted = HostedAIProvider()
+  private let byok = BYOKAIProvider()
 
-    guard !apiKey.isEmpty else {
-      throw NSError(
-        domain: "AIService", code: 401,
-        userInfo: [
-          NSLocalizedDescriptionKey: "API Key is missing. Please configure it in Settings."
-        ])
+  /// Routes to the hosted backend or the user's own provider. When the hosted service is switched
+  /// off or unreachable and the user has saved their own key, that key is used as an escape hatch.
+  private func run<T: Sendable>(_ operation: @Sendable (any AIProvider) async throws -> T) async throws -> T {
+    guard AIMode.current == .hosted else {
+      return try await operation(byok)
     }
+    do {
+      return try await operation(hosted)
+    } catch let error as AIServiceError where error.allowsBYOKFallback && BYOKAIProvider.hasAPIKey {
+      print("⚠️ Hosted AI unavailable (\(error)); falling back to the user's own key.")
+      return try await operation(byok)
+    }
+  }
 
-    let key = "summary-\(title)"
+  func summarize(
+    storyId: Int? = nil,
+    title: String,
+    url: String?,
+    articleContent: String?,
+    comments: [String]
+  ) async throws -> String {
+    let preferredLang = UserDefaults.standard.string(forKey: "preferred_language") ?? "system"
+    let key = "summary-\(storyId.map(String.init) ?? title)-\(preferredLang)"
     return try await TaskCoalescer.shared.runOrCoalesce(key: key) {
-      let prompt = Self.buildSummaryPrompt(
-        title: title,
-        url: url,
-        articleContent: articleContent,
-        comments: comments,
-        preferredLanguage: preferredLang
-      )
-
-      return try await self.sendChatCompletion(
-        apiKey: apiKey,
-        baseUrl: baseUrl,
-        model: model,
-        systemMessage: "You are a helpful assistant.",
-        userPrompt: prompt,
-        temperature: 0.7
-      )
+      try await self.run { provider in
+        try await provider.summarize(
+          storyId: storyId,
+          title: title,
+          url: url,
+          articleContent: articleContent,
+          comments: comments,
+          preferredLanguage: preferredLang
+        )
+      }
     }
   }
 
   func translateArticle(
+    storyId: Int? = nil,
     title: String,
     articleText: String,
     targetLanguage: String
   ) async throws -> ArticleTranslation {
-    let apiKey = KeychainHelper.read(key: "ai_api_key") ?? ""
-    let baseUrl = UserDefaults.standard.string(forKey: "ai_base_url") ?? AIDefaults.baseURL
-    let model = UserDefaults.standard.string(forKey: "ai_model") ?? AIDefaults.model
-
-    guard !apiKey.isEmpty else {
-      throw NSError(
-        domain: "AIService", code: 401,
-        userInfo: [
-          NSLocalizedDescriptionKey: "API Key is missing. Please configure it in Settings."
-        ])
-    }
-
     let key = "article-\(targetLanguage)-\(title)"
     return try await TaskCoalescer.shared.runOrCoalesce(key: key) {
-      let prompt = Self.buildArticleTranslationPrompt(
-        title: title,
-        articleText: articleText,
-        targetLanguage: targetLanguage
-      )
-      let response = try await self.sendChatCompletion(
-        apiKey: apiKey,
-        baseUrl: baseUrl,
-        model: model,
-        systemMessage: "You translate technical articles faithfully for Hacker News readers.",
-        userPrompt: prompt,
-        temperature: 0.2
-      )
-
-      return try Self.decodeArticleTranslation(response)
+      try await self.run { provider in
+        try await provider.translateArticle(
+          storyId: storyId,
+          title: title,
+          articleText: articleText,
+          targetLanguage: targetLanguage
+        )
+      }
     }
   }
 
@@ -232,121 +216,13 @@ final class AIService: Sendable {
     _ titles: [TitleTranslationInput],
     targetLanguage: String
   ) async throws -> [Int: String] {
-    let apiKey = KeychainHelper.read(key: "ai_api_key") ?? ""
-    let baseUrl = UserDefaults.standard.string(forKey: "ai_base_url") ?? AIDefaults.baseURL
-    let model = UserDefaults.standard.string(forKey: "ai_model") ?? AIDefaults.model
-
-    guard !apiKey.isEmpty else {
-      throw NSError(
-        domain: "AIService", code: 401,
-        userInfo: [
-          NSLocalizedDescriptionKey: "API Key is missing. Please configure it in Settings."
-        ])
-    }
-
     let sortedIds = titles.map(\.id).sorted().map(String.init).joined(separator: "-")
     let key = "batch-\(targetLanguage)-\(sortedIds)"
-
     return try await TaskCoalescer.shared.runOrCoalesce(key: key) {
-      let response = try await self.sendChatCompletion(
-        apiKey: apiKey,
-        baseUrl: baseUrl,
-        model: model,
-        systemMessage: "You translate Hacker News story titles faithfully.",
-        userPrompt: Self.buildBatchTitleTranslationPrompt(titles: titles, targetLanguage: targetLanguage),
-        temperature: 0.1
-      )
-
-      return try Self.decodeTitleTranslationBatch(response)
-    }
-  }
-
-  private func sendChatCompletion(
-    apiKey: String,
-    baseUrl: String,
-    model: String,
-    systemMessage: String,
-    userPrompt: String,
-    temperature: Double
-  ) async throws -> String {
-    let requestBody = ChatRequest(
-      model: model,
-      messages: [
-        ChatMessage(role: "system", content: systemMessage),
-        ChatMessage(role: "user", content: userPrompt),
-      ],
-      temperature: temperature
-    )
-
-    let endpoint =
-      URL(string: baseUrl)?.appendingPathComponent("chat/completions") ?? URL(
-        string: "\(AIDefaults.baseURL)/chat/completions")!
-
-    var request = URLRequest(url: endpoint)
-    request.httpMethod = "POST"
-    request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-    request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-    request.httpBody = try JSONEncoder().encode(requestBody)
-
-    // Retry Logic: 3 attempts
-    var lastError: Error?
-    for attempt in 1...3 {
-      do {
-        let (data, response) = try await URLSession.shared.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-          throw NSError(
-            domain: "AIService", code: 500,
-            userInfo: [NSLocalizedDescriptionKey: "Invalid Response"])
-        }
-
-        // Success
-        if httpResponse.statusCode == 200 {
-          let chatResponse = try JSONDecoder().decode(ChatResponse.self, from: data)
-          return chatResponse.choices.first?.message.content ?? "No response content."
-        }
-
-        // Server Error (Rate Limit / 5xx) -> Retry
-        // Client Error (401/400) -> Fail immediately (don't retry authentication errors)
-        if (500...599).contains(httpResponse.statusCode) || httpResponse.statusCode == 429 {
-          let errorMsg = String(data: data, encoding: .utf8) ?? "Server Error"
-          throw NSError(
-            domain: "AIService", code: httpResponse.statusCode,
-            userInfo: [NSLocalizedDescriptionKey: errorMsg])
-        } else {
-          // 4xx Errors (except 429) - Fatal
-          let errorMsg = String(data: data, encoding: .utf8) ?? "Client Error"
-          throw NSError(
-            domain: "AIService", code: httpResponse.statusCode,
-            userInfo: [NSLocalizedDescriptionKey: "API Request Failed: \(errorMsg)"])
-        }
-
-      } catch {
-        if Task.isCancelled || (error as NSError).code == NSURLErrorCancelled {
-          throw error
-        }
-
-        print("⚠️ Attempt \(attempt) failed: \(error.localizedDescription)")
-        lastError = error
-
-        // Check if we should retry (don't retry 401/403/400)
-        let nsError = error as NSError
-        if [400, 401, 403].contains(nsError.code) {
-          throw error
-        }
-
-        // Wait before retry (exponential backoff-ish)
-        if attempt < 3 {
-          try await Task.sleep(nanoseconds: UInt64(attempt * 1_000_000_000))
-        }
+      try await self.run { provider in
+        try await provider.translateTitles(titles, targetLanguage: targetLanguage)
       }
     }
-
-    // If we're here, all retries failed
-    throw lastError
-      ?? NSError(
-        domain: "AIService", code: 500,
-        userInfo: [NSLocalizedDescriptionKey: "Failed after 3 retries."])
   }
 
   nonisolated static func buildArticleTranslationPrompt(
