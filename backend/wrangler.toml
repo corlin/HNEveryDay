@@ -8,8 +8,10 @@ APP_TEAM_ID = "5M726V7N7X"
 APP_BUNDLE_ID = "cn.corlin.hneveryday.HNEveryDay"
 # off | soft | enforce  (see docs/PRO_PAYWALL_AND_BACKEND_SPEC.md §7)
 ATTEST_MODE = "soft"
-ALLOW_DEV_ATTEST = "false"
-ALLOW_SANDBOX = "false"
+# testing phase: set back to "false" before App Store release
+ALLOW_DEV_ATTEST = "true"
+# testing phase: set back to "false" before App Store release
+ALLOW_SANDBOX = "true"
 LLM_BASE_URL = "https://api.deepseek.com"
 LLM_MODEL = "deepseek-v4-flash"
 DAILY_TOKEN_BUDGET = "20000000"
@@ -26,12 +28,12 @@ PRO_PRODUCT_IDS = "cn.corlin.hneveryday.pro.monthly,cn.corlin.hneveryday.pro.ann
 [[d1_databases]]
 binding = "DB"
 database_name = "hneveryday"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "1a55ea22-5d17-4ea2-a9f8-d925c0a290f0"
 migrations_dir = "migrations"
 
 [[kv_namespaces]]
 binding = "CONFIG"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "c7fb7cd944c849069ec6562cf19c6b03"
 
 [[durable_objects.bindings]]
 name = "COALESCER"
