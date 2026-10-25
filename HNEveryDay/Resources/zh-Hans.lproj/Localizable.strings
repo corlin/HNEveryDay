@@ -153,3 +153,19 @@
 "Upgrade to HNEveryDay Pro" = "升级到 HNEveryDay Pro";
 "Upgrade" = "升级";
 "Daily limit reached" = "已达今日额度";
+
+/* Ask Agent */
+"Ask Agent" = "问 Agent";
+"Quick questions" = "快捷提问";
+"What is the biggest disagreement in the comments?" = "评论区最大的争议是什么？";
+"Explain the core code or architecture" = "解释核心代码或架构设计";
+"Compare the alternatives mentioned" = "对比文中提到的替代方案";
+"When does this fit, and when not?" = "这项技术适用和不适用的场景";
+"Today %lld/%lld" = "今日 %lld/%lld";
+"AI-generated, may be inaccurate" = "AI 生成，可能有误";
+"Report" = "举报";
+"Reported" = "已举报";
+"Copy" = "复制";
+"Ask a follow-up…" = "继续追问…";
+"Stop" = "停止";
+"Send" = "发送";

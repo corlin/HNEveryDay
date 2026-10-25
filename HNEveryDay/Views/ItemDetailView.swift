@@ -31,6 +31,8 @@ struct ItemDetailView: View {
   @State private var translationError: String?
   @State private var translationQuotaExceeded = false
   @State private var showPaywall = false
+  @State private var showAgent = false
+  @State private var isAgentEnabled = true
   @State private var showTranslatedArticle = false
 
   // Export State
@@ -47,6 +49,23 @@ struct ItemDetailView: View {
 
   private var translationMode: TranslationMode {
     TranslationMode(rawValue: translationModeRaw) ?? .off
+  }
+
+  private var agentContext: AgentContext {
+    let article = parsedArticle.flatMap { $0.textContent ?? HTMLHelper.stripTags($0.contentHTML ?? "") }
+    let selfText = currentItem.text.map { HTMLHelper.stripTags($0) }
+    return AgentContext(
+      storyId: currentItem.id,
+      title: currentItem.title ?? "Untitled",
+      url: currentItem.url,
+      score: currentItem.score ?? 0,
+      commentCount: currentItem.descendants ?? 0,
+      articleText: article ?? selfText,
+      comments: CommentNode.flattened(comments).compactMap { node in
+        guard let text = node.item.text else { return nil }
+        return AgentComment(depth: node.depth, author: node.item.by ?? "unknown", text: HTMLHelper.stripTags(text))
+      }
+    )
   }
 
   private var targetLanguage: String {
@@ -165,6 +184,12 @@ struct ItemDetailView: View {
         .tag(1)
       }
       .tabViewStyle(.page(indexDisplayMode: .never))  // Swipe left/right
+      .overlay(alignment: .bottomTrailing) {
+        if isAgentEnabled {
+          AskAgentButton { showAgent = true }
+            .padding(16)
+        }
+      }
       .background(Color(.systemGroupedBackground))
     }
     .background(Color(.systemGroupedBackground))
@@ -228,6 +253,14 @@ struct ItemDetailView: View {
     // Share Sheet
     .sheet(isPresented: $showPaywall) {
       PaywallView(reason: .quota(kind: "article"))
+    }
+    .sheet(isPresented: $showAgent) {
+      AgentSheetView(context: agentContext)
+    }
+    .task {
+      if AIMode.current == .hosted {
+        isAgentEnabled = await RemoteConfigStore.shared.current().features.agent
+      }
     }
     .sheet(item: $exportData) { data in
       ShareSheet(activityItems: [data.text])

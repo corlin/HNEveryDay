@@ -435,8 +435,8 @@ event: error  data: {"code": "upstream_error", "message": "..."}
 - **门槛**：沙盒下过期、退款、家庭共享、跨设备恢复均测通。
 
 ### 阶段 4：Agent
-- [ ] Agent Sheet、Smart Chips、流式输出与停止、免费 3 轮/天
-- [ ] BYOK 模式下直连流式
+- [x] Agent Sheet、Smart Chips、流式输出与停止、免费 3 轮/天
+- [x] BYOK 模式下直连流式
 - **门槛**：试用→付费转化率；每付费用户月推理成本 < 月费 30%。
 
 ### 阶段 5（视数据而定）

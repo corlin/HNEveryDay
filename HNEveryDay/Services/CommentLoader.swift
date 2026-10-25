@@ -7,7 +7,7 @@
 
 import Foundation
 
-protocol HNCommentFetching: Sendable {
+nonisolated protocol HNCommentFetching: Sendable {
   func fetchItems(ids: [Int]) async throws -> [HNItem]
 }
 
