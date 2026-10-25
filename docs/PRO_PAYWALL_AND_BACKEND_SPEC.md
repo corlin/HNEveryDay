@@ -136,8 +136,8 @@ flowchart TD
 > **取舍说明**：BYOK 模式下 Agent 不收费。BYOK 用户是少数愿意自己付模型费用的极客；向他们收第二遍钱伤口碑，而 Pro 的价值是“零配置 + 托管额度 + 后续 Pro 特权”。如果数据显示大量用户借 BYOK 绕过 Pro，可在阶段 4 重新评估。
 
 ### 定价（首发）
-* **月度订阅** `com.hneveryday.pro.monthly`：$2.99 / 月
-* **年度订阅** `com.hneveryday.pro.annual`：$19.99 / 年，**7 天免费试用**（主推）
+* **月度订阅** `cn.corlin.hneveryday.pro.monthly`：$2.99 / 月
+* **年度订阅** `cn.corlin.hneveryday.pro.annual`：$19.99 / 年，**7 天免费试用**（主推）
 * ~~终身买断~~：首发不上。阶段 4 若推出，价格 ≥ $79、限时或限量，条款写明 Agent 受公平使用约束。
 
 产品 ID 前缀以实际 Bundle ID 为准；客户端从远程配置读取产品 ID 列表，避免硬编码。
@@ -413,13 +413,13 @@ event: error  data: {"code": "upstream_error", "message": "..."}
 - [x] 宪章升级 v2.0.0
 
 ### 阶段 1：后端（`backend/`）
-- [ ] Worker、D1 迁移、远程配置、kill switch
-- [ ] App Attest 设备令牌、按设备限流、全局预算熔断
-- [ ] 标题翻译 / 摘要（含语言维度、DO 合流）/ 全文翻译
-- [ ] Cron：归档、清理、预热
-- [ ] 订阅校验、Server Notifications V2、`/me`
-- [ ] Agent SSE 端点（阶段 4 客户端使用）
-- [ ] 单元测试；部署说明
+- [x] Worker、D1 迁移、远程配置、kill switch
+- [x] App Attest 设备令牌、按设备限流、全局预算熔断
+- [x] 标题翻译 / 摘要（含语言维度、DO 合流）/ 全文翻译
+- [x] Cron：归档、清理、预热
+- [x] 订阅校验、Server Notifications V2、`/me`
+- [x] Agent SSE 端点（阶段 4 客户端使用）
+- [x] 单元测试；部署说明
 - **门槛**：线上 2 周数据显示缓存命中率达标、P95 可接受、日成本在预算内。
 
 ### 阶段 2：客户端接入托管后端

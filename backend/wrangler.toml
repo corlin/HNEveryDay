@@ -1,0 +1,58 @@
+name = "hneveryday-api"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+APP_TEAM_ID = "REPLACE_WITH_TEAM_ID"
+APP_BUNDLE_ID = "cn.corlin.hneveryday.HNEveryDay"
+# off | soft | enforce  (see docs/PRO_PAYWALL_AND_BACKEND_SPEC.md §7)
+ATTEST_MODE = "soft"
+ALLOW_DEV_ATTEST = "false"
+ALLOW_SANDBOX = "false"
+LLM_BASE_URL = "https://api.deepseek.com"
+LLM_MODEL = "deepseek-v4-flash"
+DAILY_TOKEN_BUDGET = "20000000"
+PREWARM_LANGS = "zh-Hans"
+MAX_DEVICES_PER_SUBSCRIPTION = "5"
+PRO_PRODUCT_IDS = "cn.corlin.hneveryday.pro.monthly,cn.corlin.hneveryday.pro.annual"
+
+# Secrets (wrangler secret put ...):
+#   LLM_API_KEY      hosted model provider key
+#   TOKEN_SECRET     HMAC key for device tokens (>= 32 random bytes)
+#   ADMIN_TOKEN      bearer token for /api/v1/admin/*
+#   ASC_KEY_ID, ASC_ISSUER_ID, ASC_PRIVATE_KEY   optional, App Store Server API
+
+[[d1_databases]]
+binding = "DB"
+database_name = "hneveryday"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+[[kv_namespaces]]
+binding = "CONFIG"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+[[durable_objects.bindings]]
+name = "COALESCER"
+class_name = "GenerationCoalescer"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["GenerationCoalescer"]
+
+[[ratelimits]]
+name = "DEVICE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 60, period = 60 }
+
+[[ratelimits]]
+name = "IP_LIMITER"
+namespace_id = "1002"
+simple = { limit = 30, period = 60 }
+
+[triggers]
+crons = ["17 * * * *"]
+
+[observability]
+enabled = true
