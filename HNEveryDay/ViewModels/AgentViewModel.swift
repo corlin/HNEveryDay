@@ -13,20 +13,54 @@ struct AgentMessage: Identifiable, Equatable {
 
   let id = UUID()
   let role: Role
+  /// Raw text; for answers this includes the trailing `<followups>` block.
   var text: String
+
+  /// What the reader sees (and what is sent back as history, copied or reported).
+  var visibleText: String {
+    role == .assistant ? AgentFollowUps.visibleText(text) : text
+  }
+
+  var followUps: [String] {
+    role == .assistant ? AgentFollowUps.questions(text) : []
+  }
 }
 
-/// Smart Chips shown before the first question; one tap asks a common question.
+/// Smart Chips: story-specific questions generated for each story, with generic ones as a fallback.
 struct AgentChip: Identifiable, Hashable {
-  let id: String
   let icon: String
   let title: String
 
-  static let all: [AgentChip] = [
-    AgentChip(id: "controversy", icon: "flame", title: String(localized: "What is the biggest disagreement in the comments?")),
-    AgentChip(id: "code", icon: "chevron.left.forwardslash.chevron.right", title: String(localized: "Explain the core code or architecture")),
-    AgentChip(id: "alternatives", icon: "arrow.left.arrow.right", title: String(localized: "Compare the alternatives mentioned")),
-    AgentChip(id: "fit", icon: "scope", title: String(localized: "When does this fit, and when not?")),
+  var id: String { title }
+
+  init(icon: String, title: String) {
+    self.icon = icon
+    self.title = title
+  }
+
+  init(_ question: AgentQuestion) {
+    self.init(icon: Self.icon(for: question.type), title: question.text)
+  }
+
+  static func icon(for type: String) -> String {
+    switch type {
+    case "debate": return "flame"
+    case "code": return "chevron.left.forwardslash.chevron.right"
+    case "compare": return "arrow.left.arrow.right"
+    case "fit": return "scope"
+    case "risk": return "exclamationmark.triangle"
+    case "history": return "clock.arrow.circlepath"
+    case "data": return "chart.bar"
+    case "practice": return "hammer"
+    default: return "lightbulb"
+    }
+  }
+
+  static let fallback: [AgentChip] = [
+    AgentChip(icon: "flame", title: String(localized: "What is the biggest disagreement in the comments?")),
+    AgentChip(icon: "chevron.left.forwardslash.chevron.right", title: String(localized: "Explain the core code or architecture")),
+    AgentChip(icon: "arrow.left.arrow.right", title: String(localized: "Compare the alternatives mentioned")),
+    AgentChip(icon: "scope", title: String(localized: "When does this fit, and when not?")),
   ]
 }
 
@@ -37,6 +71,8 @@ final class AgentViewModel {
   private(set) var isStreaming = false
   private(set) var remaining: Int?
   private(set) var limit: Int?
+  private(set) var suggestions: [AgentChip] = []
+  private(set) var isLoadingSuggestions = false
   var errorMessage: String?
   var quotaExceeded = false
 
@@ -49,6 +85,21 @@ final class AgentViewModel {
 
   var canSend: Bool { !isStreaming }
 
+  /// Follow-up chips under the latest finished answer.
+  var followUpChips: [AgentChip] {
+    guard !isStreaming, let last = messages.last, last.role == .assistant else { return [] }
+    return last.followUps.map { AgentChip(icon: "arrow.turn.down.right", title: $0) }
+  }
+
+  /// Loads story-specific starter questions; falls back to generic ones when generation fails.
+  func loadSuggestions() async {
+    guard suggestions.isEmpty, !isLoadingSuggestions else { return }
+    isLoadingSuggestions = true
+    defer { isLoadingSuggestions = false }
+    let questions = (try? await AgentService.questions(context: context)) ?? []
+    suggestions = questions.isEmpty ? AgentChip.fallback : questions.map(AgentChip.init)
+  }
+
   func send(_ text: String) {
     let question = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !question.isEmpty, !isStreaming else { return }
@@ -56,7 +107,7 @@ final class AgentViewModel {
     errorMessage = nil
     quotaExceeded = false
     messages.append(AgentMessage(role: .user, text: question))
-    let history = messages.map { AgentTurn(role: $0.role.rawValue, content: $0.text) }
+    let history = messages.map { AgentTurn(role: $0.role.rawValue, content: $0.visibleText) }
     messages.append(AgentMessage(role: .assistant, text: ""))
     let replyId = messages[messages.count - 1].id
     isStreaming = true
@@ -124,6 +175,6 @@ final class AgentViewModel {
 
   /// Reports an AI answer for review (hosted mode only).
   func report(_ message: AgentMessage) async {
-    await BackendClient.shared.report(storyId: context.storyId, kind: "agent", reason: message.text)
+    await BackendClient.shared.report(storyId: context.storyId, kind: "agent", reason: message.visibleText)
   }
 }

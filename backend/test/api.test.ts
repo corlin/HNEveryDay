@@ -187,6 +187,40 @@ describe("summary", () => {
   });
 });
 
+describe("agent questions", () => {
+  it("generates story-specific questions once, normalizes them and serves them from cache", async () => {
+    const { llmCalls } = mockUpstream();
+    const { token } = await attestedToken();
+    const id = storyId();
+    const first = (await (await call("/api/v1/agent/questions", { token, body: { story_id: id, lang: "zh-Hans" } })).json()) as {
+      questions: { type: string; text: string }[];
+      cached: boolean;
+    };
+    expect(first.cached).toBe(false);
+    expect(first.questions).toEqual([
+      { type: "debate", text: "评论里谁更有道理？" },
+      { type: "code", text: "它底层是怎么实现的？" },
+      { type: "explain", text: "和 SQLite 比怎么样？" },
+    ]);
+    expect(llmCalls[0].messages[1].content).toContain(`Story ${id}`);
+
+    const second = (await (await call("/api/v1/agent/questions", { token, body: { story_id: id, lang: "zh-Hans" } })).json()) as {
+      cached: boolean;
+    };
+    expect(second.cached).toBe(true);
+    expect(llmCalls).toHaveLength(1);
+    const me = (await (await call("/api/v1/me", { token })).json()) as { quotas: { agent: { used: number } } };
+    expect(me.quotas.agent.used).toBe(0);
+  });
+
+  it("asks the agent for follow-up questions", async () => {
+    const { llmCalls } = mockUpstream();
+    const { token } = await attestedToken();
+    await (await call("/api/v1/agent/chat", { token, body: { story_id: storyId(), lang: "en", messages: [{ role: "user", content: "hi" }] } })).text();
+    expect(llmCalls[0].messages[0].content).toContain("<followups>");
+  });
+});
+
 describe("content safety", () => {
   it("maps the provider's content-risk rejection to content_blocked and refunds quota", async () => {
     mockUpstream(() => Response.json({ error: { message: "Content Exists Risk" } }, { status: 400 }));
@@ -208,7 +242,7 @@ describe("article translation", () => {
     expect(first).toMatchObject({ title: "标题", markdown: "正文" });
     await call("/api/v1/translate/article", { token, body });
     expect(llmCalls).toHaveLength(2);
-    const count = await E.DB.prepare("SELECT COUNT(*) AS n FROM ai_outputs WHERE kind NOT IN ('title', 'summary')").first<{ n: number }>();
+    const count = await E.DB.prepare("SELECT COUNT(*) AS n FROM ai_outputs WHERE kind NOT IN ('title', 'summary', 'questions')").first<{ n: number }>();
     expect(count?.n).toBe(0);
   });
 });

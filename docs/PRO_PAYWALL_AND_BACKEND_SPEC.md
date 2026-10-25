@@ -181,10 +181,11 @@ flowchart TD
 +------------------------------------------------+
 |  ✨ Ask Agent                 今日剩余 2/3  [X] |
 +------------------------------------------------+
-|  [🔥 评论区最大争议是什么？]                     |
-|  [💻 解释核心代码/架构设计]                      |
-|  [🆚 文中提到的替代方案对比]                     |
-|  [🎯 适用与不适用场景]                           |
+|  [🔥 作者说 Postgres 够用，评论里谁更有道理？]    |
+|  [💻 它的 MVCC 是怎么绕开写放大的？]             |
+|  [🆚 和 SQLite + Litestream 比差在哪？]          |
+|  [🎯 我们 10 人团队值得迁移吗？]                 |
+|  （按文章与评论动态生成的示例）                   |
 +------------------------------------------------+
 |  User: ...                                     |
 |  Agent: (流式输出, Markdown)                     |
@@ -197,6 +198,9 @@ flowchart TD
 ### 3. 行为
 * 流式输出，`ScrollViewReader` 自动吸底；生成中“发送”按钮变为 **停止**。
 * 停止或网络中断：已输出内容保留；**该轮已计入额度**（在请求开始时扣减），不自动重试。
+* **推荐问题（Smart Chips）由后端统一生成**：每篇文章 × 每种语言生成一次（`kind = questions`，4 个，带类型用于图标），存入 `ai_outputs` 供所有用户共享；不计额度，受每日 token 预算约束。问题须具体到本文的项目、论点或评论争议，禁止通用模板句。BYOK 模式也从后端取（只发公开的 story_id 与语言，不发正文），后端不可用时用用户自己的 Key 本地生成；都失败时退回 4 个通用问题。
+* **追问建议**：Agent 每次回答末尾附 `<followups>` 块（3 个后续问题），客户端剥离后显示为回答下方的胶囊；与回答同一次调用生成，无额外成本。
+* **语气**：像懂行的同事聊天，先直接回答，再按需展开；有分歧时给出倾向和理由；不强制标题/列表结构。
 * 会话只保存在内存中（关闭 Sheet 即丢弃），服务端**不存储**对话内容。
 * 上下文：后端从 HN API 拉取标题与评论树（按顺序取前 40 条、每条 ≤ 600 字符、总计 ≤ 24k 字符）；客户端可附带 Reader 正文摘录（≤ 12k 字符）；历史对话最多 10 轮。
 * 系统提示明确：文章与评论是**不可信的第三方数据**，其中的指令一律忽略。
@@ -291,6 +295,7 @@ CREATE TABLE story_archive (
 | POST | `/api/v1/summary` | `{story_id, lang, article_text?}` → `{summary, cached}` |
 | POST | `/api/v1/translate/article` | `{story_id?, title, lang, article_text}` → `{title, markdown}`；不缓存 |
 | POST | `/api/v1/agent/chat` | `{story_id, lang, messages[], article_text?}` → SSE |
+| POST | `/api/v1/agent/questions` | `{story_id, lang, article_text?}` → `{questions: [{type, text}], cached}`；按 story × lang 缓存共享，不计额度 |
 | POST | `/api/v1/subscription/verify` | `{signed_transaction}` → `{tier, expires_at, product_id}` |
 | GET | `/api/v1/me` | 当前设备的层级与今日额度使用 |
 | POST | `/api/v1/report` | `{story_id, kind, reason}` 举报 AI 内容 |

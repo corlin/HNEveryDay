@@ -33,6 +33,9 @@ struct AgentSheetView: View {
                 bubble(message)
                   .id(message.id)
               }
+              if !model.followUpChips.isEmpty {
+                chipList(model.followUpChips)
+              }
               if let error = model.errorMessage {
                 errorCard(error)
               }
@@ -72,6 +75,7 @@ struct AgentSheetView: View {
     .presentationDetents([.medium, .large])
     .presentationDragIndicator(.visible)
     .onAppear { AppTheme.Haptics.playLightImpact() }
+    .task { await model.loadSuggestions() }
     .sheet(isPresented: $showPaywall) {
       PaywallView(reason: .agent)
     }
@@ -85,7 +89,22 @@ struct AgentSheetView: View {
       Text("Quick questions")
         .font(.caption.weight(.semibold))
         .foregroundStyle(.secondary)
-      ForEach(AgentChip.all) { chip in
+      if model.isLoadingSuggestions {
+        ForEach(0..<3, id: \.self) { _ in
+          RoundedRectangle(cornerRadius: 10)
+            .fill(Color.primary.opacity(0.06))
+            .frame(height: 38)
+        }
+        .accessibilityLabel(Text("Loading questions"))
+      } else {
+        chipList(model.suggestions)
+      }
+    }
+  }
+
+  private func chipList(_ chips: [AgentChip]) -> some View {
+    VStack(alignment: .leading, spacing: 8) {
+      ForEach(chips) { chip in
         Button {
           model.send(chip.title)
         } label: {
@@ -123,12 +142,12 @@ struct AgentSheetView: View {
       }
     case .assistant:
       VStack(alignment: .leading, spacing: 6) {
-        if message.text.isEmpty {
+        if message.visibleText.isEmpty {
           ProgressView().controlSize(.small)
         } else {
-          MarkdownContentView(content: message.text)
+          MarkdownContentView(content: message.visibleText)
         }
-        if !message.text.isEmpty && !(model.isStreaming && message.id == model.messages.last?.id) {
+        if !message.visibleText.isEmpty && !(model.isStreaming && message.id == model.messages.last?.id) {
           HStack(spacing: 12) {
             AIContentLabel()
             if AIMode.current == .hosted {
@@ -149,11 +168,11 @@ struct AgentSheetView: View {
       .clipShape(RoundedRectangle(cornerRadius: 12))
       .contextMenu {
         Button {
-          UIPasteboard.general.string = AIContentLabel.labeled(message.text)
+          UIPasteboard.general.string = AIContentLabel.labeled(message.visibleText)
         } label: {
           Label("Copy", systemImage: "doc.on.doc")
         }
-        ShareLink(item: AIContentLabel.labeled(message.text))
+        ShareLink(item: AIContentLabel.labeled(message.visibleText))
       }
     }
   }

@@ -18,7 +18,7 @@ CREATE INDEX idx_stories_time ON stories(time);
 -- AI outputs are kept long-term and only become stale when the prompt version or model changes.
 CREATE TABLE ai_outputs (
   story_id INTEGER NOT NULL,
-  kind TEXT NOT NULL,              -- 'title' | 'summary'
+  kind TEXT NOT NULL,              -- 'title' | 'summary' | 'questions'
   lang TEXT NOT NULL,
   prompt_version INTEGER NOT NULL,
   model TEXT NOT NULL,

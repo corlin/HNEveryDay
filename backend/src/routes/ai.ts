@@ -8,7 +8,7 @@ import { chatCompletion, openChatStream, parseChatStream, type ChatMessage } fro
 import { blockedAmong, getOutput } from "../outputs";
 import { AGENT_MAX_HISTORY, agentSystemPrompt, articleTranslationMessages, isSupportedLanguage } from "../prompts";
 import { assertBudget, consumeQuota, recordTokens, refundQuota, resolveTier, usageToday, quotaLimit } from "../quota";
-import { translateTitles } from "../generation";
+import { agentQuestions, translateTitles } from "../generation";
 
 function requireLanguage(value: unknown): string {
   if (!isSupportedLanguage(value)) throw new HttpError(400, "unsupported_language", "lang is not supported");
@@ -104,6 +104,19 @@ export async function handleTranslateArticle(request: Request, env: Env): Promis
     if (error instanceof HttpError) throw error;
     throw new HttpError(502, "upstream_error", "Translation failed");
   }
+}
+
+/** POST /api/v1/agent/questions { story_id, lang, article_text? } -> { questions: [{ type, text }], cached } */
+export async function handleAgentQuestions(request: Request, env: Env): Promise<Response> {
+  const config = await loadConfig(env);
+  assertFeatureEnabled(config, "agent", request);
+  await authenticate(request, env);
+  const body = await readJson<Record<string, unknown>>(request);
+  const storyId = requireStoryId(body.story_id);
+  const lang = requireLanguage(body.lang);
+  const articleText = optionalString(body.article_text, "article_text", 12_000);
+  await assertNotBlocked(env, storyId);
+  return json(await agentQuestions(env, storyId, lang, articleText));
 }
 
 function sse(event: string, data: unknown): Uint8Array {

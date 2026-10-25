@@ -101,7 +101,7 @@ struct SettingsView: View {
             }
           } else {
             Text(
-              "Advanced: requests go directly to your own provider with your key. Nothing passes through HNEveryDay servers and there are no daily limits.",
+              "Advanced: your questions and articles go directly to your own provider with your key, with no daily limits. Only suggested questions for a story are fetched from HNEveryDay.",
               comment: "BYOK mode explanation")
           }
         }

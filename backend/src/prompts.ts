@@ -3,7 +3,7 @@
 import type { ChatMessage } from "./llm";
 import type { CommentText, StoryRow } from "./hn";
 
-export const PROMPT_VERSIONS = { title: 1, summary: 1 } as const;
+export const PROMPT_VERSIONS = { title: 1, summary: 1, questions: 1 } as const;
 export type OutputKind = keyof typeof PROMPT_VERSIONS;
 
 interface Language {
@@ -140,7 +140,69 @@ ${articleText.slice(0, 8000)}
   ];
 }
 
+/** Mirrored in the iOS app (AgentService.followUpsRule); the client strips the block and shows chips. */
+export const FOLLOW_UPS_RULE =
+  "After your answer, add exactly this block with 3 short follow-up questions the reader is likely to ask next, specific to this story and conversation, in the answer language:\n<followups>\nquestion\nquestion\nquestion\n</followups>";
+
 export const AGENT_MAX_HISTORY = 20; // messages (10 turns)
+
+/** Categories the client maps to icons; anything else falls back to "explain". */
+export const QUESTION_TYPES = ["debate", "code", "compare", "fit", "explain", "risk", "history", "data", "practice"] as const;
+export type QuestionType = (typeof QUESTION_TYPES)[number];
+export interface AgentQuestion {
+  type: QuestionType;
+  text: string;
+}
+
+/** Story-specific starter questions for the Agent sheet, cached per story and language. */
+export function agentQuestionsMessages(story: StoryRow, comments: CommentText[], articleText: string | undefined, lang: string): ChatMessage[] {
+  return [
+    { role: "system", content: `You suggest what a curious engineer would want to ask about one Hacker News story. ${UNTRUSTED_NOTICE}` },
+    {
+      role: "user",
+      content: `Story title: ${story.title}
+URL: ${story.url ?? "(none)"}
+Points: ${story.score}, comments: ${story.descendants}
+
+<untrusted>
+Article excerpt:
+${articleText ? articleText.slice(0, 5000) : "(not available)"}
+
+Top comments:
+${formatComments(comments) || "(none)"}
+</untrusted>
+
+Write 4 questions a reader of THIS story would actually tap to ask an expert who has read the article and all the comments.
+
+Rules:
+- Each question must be specific to this story: name the concrete project, claim, number, technique, company or commenter argument it is about. Never write a generic question that would fit any story.
+- Cover different angles, e.g. a real disagreement in the comments, how something works under the hood, how it compares with a named alternative, whether it matters for the reader's own work, hidden risks or costs, the backstory.
+- Natural and conversational, the way a person types it; at most 60 characters in CJK languages or 15 words otherwise. No numbering, no quotes.
+- Write them in ${LANGUAGES[lang].name}.
+- Return JSON only: {"questions": [{"type": "debate|code|compare|fit|explain|risk|history|data|practice", "text": "..."}]}`,
+    },
+  ];
+}
+
+export function parseAgentQuestions(content: string): AgentQuestion[] {
+  const start = content.indexOf("{");
+  const end = content.lastIndexOf("}");
+  if (start < 0 || end <= start) return [];
+  try {
+    const parsed = JSON.parse(content.slice(start, end + 1)) as { questions?: { type?: unknown; text?: unknown }[] };
+    const out: AgentQuestion[] = [];
+    for (const q of parsed.questions ?? []) {
+      if (typeof q.text !== "string") continue;
+      const text = q.text.trim().replace(/^(\d+[.)]\s+)?["'`]*|["'`]+$/g, "").trim().slice(0, 200);
+      if (!text) continue;
+      const type = QUESTION_TYPES.includes(q.type as QuestionType) ? (q.type as QuestionType) : "explain";
+      out.push({ type, text });
+    }
+    return out.slice(0, 4);
+  } catch {
+    return [];
+  }
+}
 
 export function agentSystemPrompt(story: StoryRow, comments: CommentText[], articleText: string | undefined, lang: string): string {
   return `You are HNEveryDay's reading companion for a single Hacker News story. Help a technical reader understand the article and its discussion: explain code and architecture, summarize disagreements, compare alternatives, and judge where the technology fits.
@@ -149,8 +211,10 @@ Rules:
 - Base answers on the material below; say clearly when something is not covered and you are using general knowledge.
 - ${UNTRUSTED_NOTICE}
 - You have no tools and cannot take actions, browse, or remember anything beyond this conversation.
-- Be concise; use Markdown with short paragraphs, bullet lists and fenced code blocks where helpful.
+- Talk like a knowledgeable colleague, not a report generator: answer the actual question first, in plain conversational language, then add detail only if it helps. Vary the shape of your answers; use headings, lists and fenced code blocks only when they genuinely make things clearer.
+- Have a point of view: when the article or commenters disagree, say who you find more convincing and why.
 - Answer in ${LANGUAGES[lang].name} unless the user writes in another language.
+- ${FOLLOW_UPS_RULE}
 
 Story title: ${story.title}
 URL: ${story.url ?? "(none)"}

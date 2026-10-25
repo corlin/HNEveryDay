@@ -40,6 +40,15 @@ export function defaultLlm(call: LlmCall): Response {
   if (prompt.includes("story titles")) {
     const titles = JSON.parse(prompt.slice(prompt.indexOf("<untrusted>") + 11, prompt.indexOf("</untrusted>"))) as { id: number; title: string }[];
     content = JSON.stringify({ translations: titles.map((t) => ({ id: t.id, translated_title: `译 ${t.title}` })) });
+  } else if (prompt.includes('"questions"')) {
+    content = JSON.stringify({
+      questions: [
+        { type: "debate", text: "评论里谁更有道理？" },
+        { type: "code", text: "1. 它底层是怎么实现的？" },
+        { type: "bogus", text: "和 SQLite 比怎么样？" },
+        { type: "fit", text: "" },
+      ],
+    });
   } else if (prompt.includes("translated_markdown")) {
     content = JSON.stringify({ translated_title: "标题", translated_markdown: "正文" });
   } else {

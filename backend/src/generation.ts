@@ -3,7 +3,7 @@ import { HttpError } from "./http";
 import { fetchComments, fetchItem, getStories, getStory } from "./hn";
 import { chatCompletion } from "./llm";
 import { getOutput, getOutputs, putOutputs } from "./outputs";
-import { parseTitleBatch, summaryMessages, titleBatchMessages } from "./prompts";
+import { agentQuestionsMessages, parseAgentQuestions, parseTitleBatch, summaryMessages, titleBatchMessages, type AgentQuestion } from "./prompts";
 import { assertBudget, recordTokens } from "./quota";
 
 export interface SummaryJob {
@@ -37,6 +37,34 @@ export async function generateSummary(env: Env, job: SummaryJob): Promise<Summar
   const summary = result.content.trim();
   await putOutputs(env, "summary", job.lang, new Map([[job.storyId, summary]]));
   return { summary, cached: false };
+}
+
+/** Story-specific starter questions for the Agent; cached like titles and not charged to quotas. */
+export async function agentQuestions(
+  env: Env,
+  storyId: number,
+  lang: string,
+  articleText?: string,
+): Promise<{ questions: AgentQuestion[]; cached: boolean }> {
+  const existing = await getOutput(env, "questions", lang, storyId);
+  if (existing) return { questions: JSON.parse(existing) as AgentQuestion[], cached: true };
+
+  await assertBudget(env);
+  const story = await getStory(env, storyId);
+  if (!story) throw new HttpError(404, "story_not_found", "Story not found");
+  const item = await fetchItem(storyId);
+  const comments = item ? await fetchComments(item, { maxComments: 20, maxCharsEach: 300, maxCharsTotal: 6000 }) : [];
+
+  const result = await chatCompletion(env, agentQuestionsMessages(story, comments, articleText, lang), {
+    temperature: 0.8,
+    maxTokens: 500,
+    json: true,
+  });
+  await recordTokens(env, result.totalTokens);
+  const questions = parseAgentQuestions(result.content);
+  if (questions.length === 0) throw new HttpError(502, "upstream_error", "Could not generate questions");
+  await putOutputs(env, "questions", lang, new Map([[storyId, JSON.stringify(questions)]]));
+  return { questions, cached: false };
 }
 
 /**

@@ -100,7 +100,7 @@
 "Hosted" = "托管";
 "Own API Key" = "自带 Key";
 "Works out of the box. Shared translations and summaries are served from the HNEveryDay cache; new summaries and article translations count toward a daily allowance." = "开箱即用。公共的标题翻译和摘要直接来自 HNEveryDay 缓存；新生成的摘要和全文翻译计入每日额度。";
-"Advanced: requests go directly to your own provider with your key. Nothing passes through HNEveryDay servers and there are no daily limits." = "高级模式：请求用你自己的 Key 直连你配置的服务商，不经过 HNEveryDay 服务器，也没有每日额度限制。";
+"Advanced: your questions and articles go directly to your own provider with your key, with no daily limits. Only suggested questions for a story are fetched from HNEveryDay." = "高级模式：你的提问和文章内容用你自己的 Key 直连你配置的服务商，没有每日额度限制。只有每篇文章的推荐问题从 HNEveryDay 获取。";
 "Translations are cached locally with read articles." = "翻译结果会随已读文章缓存在本地。";
 "Please check your network connection and try again." = "请检查网络连接后重试。";
 "API Key is missing. Please configure it in Settings." = "尚未配置 API Key，请在设置中填写，或切换到托管模式。";
@@ -157,6 +157,7 @@
 /* Ask Agent */
 "Ask Agent" = "问 Agent";
 "Quick questions" = "快捷提问";
+"Loading questions" = "正在生成问题";
 "What is the biggest disagreement in the comments?" = "评论区最大的争议是什么？";
 "Explain the core code or architecture" = "解释核心代码或架构设计";
 "Compare the alternatives mentioned" = "对比文中提到的替代方案";

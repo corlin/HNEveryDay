@@ -40,4 +40,22 @@ final class SSEParserTests: XCTestCase {
     let events = lines.compactMap { parser.consume(line: $0) }.compactMap(AgentStreamDecoder.openAI)
     XCTAssertEqual(events, [.delta("Hi"), .done, .done])
   }
+
+  func testFollowUpsAreSplitFromAnswer() {
+    let raw = "Short answer.\n\n<followups>\n- Why not Rust?\n2. Does it scale?\nWhat about cost?\n</followups>"
+    XCTAssertEqual(AgentFollowUps.visibleText(raw), "Short answer.")
+    XCTAssertEqual(AgentFollowUps.questions(raw), ["Why not Rust?", "Does it scale?", "What about cost?"])
+  }
+
+  func testHalfStreamedFollowUpTagIsHidden() {
+    XCTAssertEqual(AgentFollowUps.visibleText("Answer <follo"), "Answer ")
+    XCTAssertEqual(AgentFollowUps.visibleText("Use Vec<T"), "Use Vec<T")
+    XCTAssertEqual(AgentFollowUps.questions("Answer <followups>\nFirst?"), ["First?"])
+  }
+
+  func testParsesSuggestedQuestions() {
+    let content = "```json\n{\"questions\": [{\"type\": \"debate\", \"text\": \" Who is right? \"}, {\"type\": \"x\", \"text\": \"\"}]}\n```"
+    XCTAssertEqual(AgentService.parseQuestions(content), [AgentQuestion(type: "debate", text: "Who is right?")])
+    XCTAssertEqual(AgentChip(AgentQuestion(type: "unknown", text: "Q")).icon, "lightbulb")
+  }
 }

@@ -5,6 +5,7 @@ import { errorResponse, HttpError, json } from "./http";
 import { handleTakedown } from "./routes/admin";
 import {
   handleAgentChat,
+  handleAgentQuestions,
   handleMe,
   handleReport,
   handleSummary,
@@ -28,6 +29,7 @@ const routes: Record<string, Handler> = {
   "POST /api/v1/translate/article": handleTranslateArticle,
   "POST /api/v1/summary": handleSummary,
   "POST /api/v1/agent/chat": handleAgentChat,
+  "POST /api/v1/agent/questions": handleAgentQuestions,
   "GET /api/v1/me": handleMe,
   "POST /api/v1/report": handleReport,
   "POST /api/v1/subscription/verify": handleVerifySubscription,
