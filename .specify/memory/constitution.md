@@ -1,16 +1,21 @@
 <!--
 Sync Impact Report:
-- Version change: N/A -> v1.0.0
-- List of modified principles: N/A (Initial ratification)
-- Added sections: Core Principles, Governance & Versioning, Tech Stack & Development Standards
-- Templates requiring updates: ✅ spec-template.md, ✅ plan-template.md, ✅ tasks-template.md
+- Version change: v1.0.0 -> v2.0.0 (MAJOR)
+- Modified principles: "3. Privacy & Local-First Security" redefined as "3. Privacy, Security & Approved Processors"
+  (hosted AI backend and hosted model provider become approved processors; BYOK stays local-first).
+- Added principles: "5. Bounded Cost & Server-Side Trust"
+- Added sections: Approved Third-Party Processors
+- Rationale: docs/PRO_PAYWALL_AND_BACKEND_SPEC.md v0.2 introduces a hosted Cloudflare backend and paid tier.
+- Templates requiring updates: ✅ spec-template.md, ✅ plan-template.md, ✅ tasks-template.md (no principle names referenced)
+
+Previous report (v1.0.0): initial ratification.
 -->
 
 # HNEveryDay Project Constitution
 
-- **Version**: v1.0.0
+- **Version**: v2.0.0
 - **Ratification Date**: 2026-07-23
-- **Last Amended Date**: 2026-07-23
+- **Last Amended Date**: 2026-10-25
 
 ## Core Principles
 
@@ -23,13 +28,31 @@ Sync Impact Report:
 - **Tree Optimization**: Comment tree structures MUST support color-coded nesting and collapsible nodes with localized sub-tree rendering to avoid heavy view re-evaluations.
 - **Zero Heavy View Work**: Expensive computations, HTML parsing, or regex matching MUST occur in background actors/services before reaching the View layer.
 
-### 3. Privacy & Local-First Security
-- **Secure Keychain Storage**: All sensitive credentials (such as AI Provider API Keys) MUST be stored strictly in the iOS Keychain (`Security` framework). Storing API keys in `UserDefaults` or plaintext files is prohibited.
-- **Local-First AI Control**: AI configurations and preferences MUST remain on-device. Zero telemetry or user tracking payload MAY be transmitted to unapproved third parties.
+### 3. Privacy, Security & Approved Processors
+- **Secure Keychain Storage**: All sensitive credentials (BYOK provider API keys, App Attest key ids, app account tokens) MUST be stored strictly in the iOS Keychain (`Security` framework). Storing them in `UserDefaults` or plaintext files is prohibited.
+- **Two AI Modes**: Hosted mode (default) sends AI requests only to the project's own backend. BYOK mode (advanced) sends AI requests directly to the user's configured provider and MUST NOT route through the project backend.
+- **Approved Processors Only**: User content MAY be sent only to the processors listed under "Approved Third-Party Processors". No telemetry or tracking payload MAY be sent anywhere else.
+- **Data Minimization**: The backend MUST NOT persist Agent conversations. Device identity MUST be anonymous (App Attest key id), never linked to personal data.
 
 ### 4. Resilience & Graceful Degradation
 - **Exponential Backoff**: All external network calls and AI service requests MUST implement robust exponential backoff retries (e.g., 3x backoff retry strategy).
 - **Graceful Error UI**: When network failures or API key errors occur, the UI MUST display clear, non-intrusive feedback guiding the user to recover without crashing or showing blank states.
+
+### 5. Bounded Cost & Server-Side Trust
+- **No Unbounded Promises**: Any feature whose cost grows with usage MUST have a quota or fair-use limit and a global budget circuit breaker.
+- **Server Is the Source of Truth**: Entitlements, quotas and device identity MUST be decided server-side (App Attest, verified App Store transactions). The client MUST NOT be trusted for these.
+- **Kill Switch**: Every hosted feature MUST be remotely disableable, and the app MUST degrade gracefully (original text, BYOK) when it is.
+- **News Feed Independence**: The story list and comments MUST keep loading directly from the official Hacker News API, independent of the project backend.
+
+## Approved Third-Party Processors
+
+| Processor | Purpose | Data |
+| :-- | :-- | :-- |
+| Hacker News official API (Firebase) | News feed, comments | None (read-only) |
+| HNEveryDay backend (Cloudflare Workers / D1) | Hosted AI, quotas, subscription state | Anonymous device id, article excerpts, Agent prompts (not stored) |
+| Hosted model provider (DeepSeek, via backend) | AI generation | Article excerpts, comments, Agent prompts |
+| Apple (StoreKit, App Attest, App Store Server API) | Purchases, device attestation | Transactions, attestation |
+| User-configured provider (BYOK mode only) | AI generation | As chosen by the user |
 
 ## Governance & Versioning
 
@@ -46,4 +69,6 @@ Sync Impact Report:
 - **Language**: Swift 5+
 - **UI Framework**: SwiftUI
 - **Persistence**: SwiftData with read-through caching
-- **Security**: iOS Keychain (`KeychainServices`)
+- **Security**: iOS Keychain (`KeychainServices`), App Attest (`DeviceCheck`)
+- **Payments**: StoreKit 2
+- **Backend**: Cloudflare Workers (TypeScript), D1, KV, Durable Objects (`backend/`)
