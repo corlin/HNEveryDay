@@ -2,6 +2,9 @@ name = "hneveryday-api"
 main = "src/index.ts"
 compatibility_date = "2026-10-01"
 compatibility_flags = ["nodejs_compat"]
+# Fixed API domain (bound in the dashboard first; declared here so deploys keep it).
+# The workers.dev address stays enabled as a fallback.
+routes = [{ pattern = "hnapi.caifu.social", custom_domain = true }]
 
 [vars]
 APP_TEAM_ID = "5M726V7N7X"

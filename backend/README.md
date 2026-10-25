@@ -41,7 +41,7 @@ npm run deploy
 部署前还需要：
 
 1. 在 `wrangler.toml` 填写 `APP_TEAM_ID`（Apple 开发者 Team ID），`APP_BUNDLE_ID` 与 Xcode 一致。
-2. App Store Connect → App 信息 → App Store 服务器通知，生产与沙盒 URL 都填 `https://<worker 域名>/api/v1/appstore/notifications`，版本选 **Version 2**。
+2. App Store Connect → App 信息 → App Store 服务器通知，生产与沙盒 URL 都填 `https://hnapi.caifu.social/api/v1/appstore/notifications`，版本选 **Version 2**。
 3. 在模型服务商控制台设置月度花费上限（`DAILY_TOKEN_BUDGET` 只是第二道防线）。
 4. TestFlight 构建的 App Attest 走生产环境；用 Xcode 直接安装的调试包是 `appattestdevelop`，需要临时把 `ALLOW_DEV_ATTEST` 设为 `"true"`。沙盒购买需要 `ALLOW_SANDBOX = "true"`。
 
@@ -62,7 +62,7 @@ npx wrangler kv key put --binding CONFIG config '{"quotas":{"free":{"summary":20
 
 ## 运维
 
-- 下线某个故事的 AI 内容：`curl -X POST https://<域名>/api/v1/admin/takedown -H "authorization: Bearer $ADMIN_TOKEN" -d '{"story_id":123}'`
+- 下线某个故事的 AI 内容：`curl -X POST https://hnapi.caifu.social/api/v1/admin/takedown -H "authorization: Bearer $ADMIN_TOKEN" -d '{"story_id":123}'`
 - 查看举报：`npx wrangler d1 execute hneveryday --remote --command "SELECT * FROM reports ORDER BY id DESC LIMIT 50"`
 - 今日 token 用量：`SELECT * FROM budget_daily ORDER BY day DESC LIMIT 7`
 - 缓存命中情况：`SELECT kind, lang, COUNT(*) FROM ai_outputs GROUP BY 1, 2`
