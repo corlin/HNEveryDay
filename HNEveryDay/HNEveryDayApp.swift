@@ -13,6 +13,7 @@ struct HNEveryDayApp: App {
   var body: some Scene {
     WindowGroup {
       ContentView()
+        .task { await StoreManager.shared.start() }
     }
     .modelContainer(DataService.shared.container)
   }

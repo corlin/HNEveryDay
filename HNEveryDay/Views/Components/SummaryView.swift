@@ -18,6 +18,8 @@ struct SummaryView: View {
   @State private var summaryText: String = ""
   @State private var isLoading = true
   @State private var errorMsg: String?
+  @State private var quotaKind: String?
+  @State private var showPaywall = false
 
   init(
     item: HNItem,
@@ -71,6 +73,9 @@ struct SummaryView: View {
       if initialSummary == nil {
         await generateSummary()
       }
+    }
+    .sheet(isPresented: $showPaywall) {
+      PaywallView(reason: .quota(kind: quotaKind ?? "summary"))
     }
   }
 
@@ -144,7 +149,7 @@ struct SummaryView: View {
           .font(.system(size: 14, weight: .semibold))
           .foregroundStyle(.orange)
 
-        Text("AI Service Connection Failed", comment: "Error title")
+        Text(quotaKind == nil ? "AI Service Connection Failed" : "Daily limit reached")
           .font(.headline)
       }
 
@@ -153,9 +158,22 @@ struct SummaryView: View {
         .font(.caption)
         .fixedSize(horizontal: false, vertical: true)
 
-      Text(errorSuggestion)
-        .font(.caption2)
-        .foregroundStyle(.secondary)
+      if quotaKind != nil {
+        if StoreManager.shared.isPaywallAvailable {
+          Button {
+            showPaywall = true
+          } label: {
+            Label("Upgrade to HNEveryDay Pro", systemImage: "sparkles")
+              .font(.subheadline.weight(.semibold))
+          }
+          .buttonStyle(.borderedProminent)
+          .tint(.orange)
+        }
+      } else {
+        Text(errorSuggestion)
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+      }
     }
     .padding(.horizontal, 14)
     .padding(.vertical, 14)
@@ -226,6 +244,9 @@ struct SummaryView: View {
       }
     } catch {
       await MainActor.run {
+        if case .quotaExceeded(let kind, _, _) = error as? AIServiceError {
+          self.quotaKind = kind
+        }
         self.errorMsg = error.localizedDescription
         self.isLoading = false
       }

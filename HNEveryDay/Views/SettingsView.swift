@@ -71,6 +71,11 @@ struct SettingsView: View {
   var body: some View {
     NavigationStack {
       Form {
+        // MARK: - Membership
+        if aiMode == .hosted {
+          ProStatusSection()
+        }
+
         // MARK: - AI Service
         Section {
           Picker("AI Service", selection: $aiMode) {

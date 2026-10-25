@@ -429,9 +429,9 @@ event: error  data: {"code": "upstream_error", "message": "..."}
 - **门槛**：托管与 BYOK 双模式回归通过；后端故障时 App 正常阅读。
 
 ### 阶段 3：StoreKit 2 付费墙
-- [ ] StoreManager、PaywallView、Pro 状态卡片、恢复购买、管理订阅
-- [ ] 额度触顶 → 付费墙；服务端订阅同步
-- [ ] 本地 `.storekit` 配置用于测试
+- [x] StoreManager、PaywallView、Pro 状态卡片、恢复购买、管理订阅
+- [x] 额度触顶 → 付费墙；服务端订阅同步
+- [x] 本地 `.storekit` 配置用于测试
 - **门槛**：沙盒下过期、退款、家庭共享、跨设备恢复均测通。
 
 ### 阶段 4：Agent

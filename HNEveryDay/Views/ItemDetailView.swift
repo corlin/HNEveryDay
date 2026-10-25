@@ -29,6 +29,8 @@ struct ItemDetailView: View {
   @State private var translatedArticleMarkdown: String?
   @State private var isTranslatingArticle = false
   @State private var translationError: String?
+  @State private var translationQuotaExceeded = false
+  @State private var showPaywall = false
   @State private var showTranslatedArticle = false
 
   // Export State
@@ -224,6 +226,9 @@ struct ItemDetailView: View {
       }
     }
     // Share Sheet
+    .sheet(isPresented: $showPaywall) {
+      PaywallView(reason: .quota(kind: "article"))
+    }
     .sheet(item: $exportData) { data in
       ShareSheet(activityItems: [data.text])
         .presentationDetents([.medium, .large])
@@ -308,6 +313,12 @@ struct ItemDetailView: View {
           .fixedSize(horizontal: false, vertical: true)
 
         Spacer(minLength: 0)
+
+        if translationQuotaExceeded && StoreManager.shared.isPaywallAvailable {
+          Button("Upgrade") { showPaywall = true }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.orange)
+        }
       }
       .padding(.horizontal, 14)
       .padding(.vertical, 9)
@@ -475,6 +486,7 @@ struct ItemDetailView: View {
     await MainActor.run {
       isTranslatingArticle = true
       translationError = nil
+      translationQuotaExceeded = false
     }
 
     do {
@@ -499,6 +511,7 @@ struct ItemDetailView: View {
       }
     } catch {
       await MainActor.run {
+        translationQuotaExceeded = (error as? AIServiceError)?.isQuotaExceeded == true
         translationError = error.localizedDescription
       }
     }

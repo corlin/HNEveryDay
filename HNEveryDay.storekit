@@ -1,0 +1,103 @@
+{
+  "identifier" : "6C1E2C55-8B1D-4C5E-9E0B-6F1A1D7C2A10",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+
+  ],
+  "settings" : {
+    "_applicationInternalID" : "",
+    "_developerTeamID" : "5M726V7N7X",
+    "_failTransactionsEnabled" : false,
+    "_locale" : "zh_CN",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+
+    ]
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "A3F0C0D4",
+      "localizations" : [
+
+      ],
+      "name" : "HNEveryDay Pro",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "19.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "B6D2A1E1",
+          "introductoryOffer" : {
+            "internalID" : "C1A4F7B2",
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P1W"
+          },
+          "localizations" : [
+            {
+              "description" : "All Pro features, billed yearly",
+              "displayName" : "Pro Annual",
+              "locale" : "en_US"
+            },
+            {
+              "description" : "全部 Pro 功能，按年付费",
+              "displayName" : "Pro 年度",
+              "locale" : "zh_Hans"
+            }
+          ],
+          "productID" : "cn.corlin.hneveryday.pro.annual",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Pro Annual",
+          "subscriptionGroupID" : "A3F0C0D4",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "2.99",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "D8E3B5C4",
+          "localizations" : [
+            {
+              "description" : "All Pro features, billed monthly",
+              "displayName" : "Pro Monthly",
+              "locale" : "en_US"
+            },
+            {
+              "description" : "全部 Pro 功能，按月付费",
+              "displayName" : "Pro 月度",
+              "locale" : "zh_Hans"
+            }
+          ],
+          "productID" : "cn.corlin.hneveryday.pro.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Pro Monthly",
+          "subscriptionGroupID" : "A3F0C0D4",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}
