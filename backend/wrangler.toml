@@ -2,6 +2,7 @@ name = "hneveryday-api"
 main = "src/index.ts"
 compatibility_date = "2026-10-01"
 compatibility_flags = ["nodejs_compat"]
+workers_dev = true
 # Fixed API domain (bound in the dashboard first; declared here so deploys keep it).
 # The workers.dev address stays enabled as a fallback.
 routes = [{ pattern = "hnapi.caifu.social", custom_domain = true }]
@@ -17,7 +18,7 @@ ALLOW_DEV_ATTEST = "true"
 ALLOW_SANDBOX = "true"
 LLM_BASE_URL = "https://api.deepseek.com"
 LLM_MODEL = "deepseek-v4-flash"
-DAILY_TOKEN_BUDGET = "20000000"
+DAILY_TOKEN_BUDGET = "2000000"
 PREWARM_LANGS = "zh-Hans"
 MAX_DEVICES_PER_SUBSCRIPTION = "5"
 PRO_PRODUCT_IDS = "cn.corlin.hneveryday.pro.monthly,cn.corlin.hneveryday.pro.annual"
