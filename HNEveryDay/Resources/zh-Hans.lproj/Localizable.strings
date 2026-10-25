@@ -173,3 +173,22 @@
 "Ask a follow-up…" = "继续追问…";
 "Stop" = "停止";
 "Send" = "发送";
+
+/* BYOK connection test */
+"Test Connection" = "测试连接";
+"Sends a one-token request to check the key, Base URL and model." = "发送一次极短请求，检查 Key、Base URL 和模型是否可用。";
+"Connected. %@ replied in %lld ms." = "连接成功，%1$@ 用时 %2$lld 毫秒响应。";
+"Enter your API key first." = "请先填写 API Key。";
+"The Base URL is not a valid http(s) address." = "Base URL 不是有效的 http(s) 地址。";
+"The API key was rejected. Check that it is correct and still active." = "API Key 被拒绝，请确认填写正确且仍然有效。";
+"The provider reports insufficient balance on this account." = "服务商提示账户余额不足。";
+"The model name was not found at this provider." = "该服务商找不到这个模型名称。";
+"The Base URL was reached but has no chat completions endpoint. It often needs to end with /v1." = "能连上 Base URL，但没有找到对话接口，通常需要以 /v1 结尾。";
+"The provider is rate limiting this key. Try again shortly." = "服务商对此 Key 限流了，请稍后再试。";
+"The request timed out." = "请求超时。";
+"This device appears to be offline." = "设备似乎没有联网。";
+"Could not reach the server. Check the Base URL." = "无法连接服务器，请检查 Base URL。";
+"Secure connection failed. Use an https address." = "安全连接失败，请使用 https 地址。";
+"The provider returned a server error (%lld)." = "服务商返回服务器错误（%lld）。";
+"The server responded, but not like an OpenAI-compatible API. Check the Base URL." = "服务器有响应，但不是 OpenAI 兼容接口，请检查 Base URL。";
+"The request failed (%lld)." = "请求失败（%lld）。";

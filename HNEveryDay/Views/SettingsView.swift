@@ -12,6 +12,8 @@ struct SettingsView: View {
   @State private var aiMode: AIMode = AIMode.current
   @State private var modelDisclosure: String?
   @State private var apiKey: String = ""
+  @State private var isTestingConnection = false
+  @State private var connectionResult: Result<BYOKConnectionSuccess, BYOKConnectionTestError>?
   @AppStorage("ai_base_url") private var baseURL: String = AIDefaults.baseURL
   @AppStorage("ai_model") private var model: String = AIDefaults.model
 
@@ -21,6 +23,44 @@ struct SettingsView: View {
   @AppStorage("cache_retention_days") private var cacheRetentionDays: Int = 30
 
   @Environment(\.dismiss) private var dismiss
+
+  @ViewBuilder
+  private var connectionResultView: some View {
+    switch connectionResult {
+    case .success(let success):
+      Label {
+        Text("Connected. \(model) replied in \(success.latencyMs) ms.")
+      } icon: {
+        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+      }
+    case .failure(let error):
+      VStack(alignment: .leading, spacing: 4) {
+        Label {
+          Text(error.failure.message)
+        } icon: {
+          Image(systemName: "xmark.octagon.fill").foregroundStyle(.red)
+        }
+        if let detail = error.detail, !detail.isEmpty {
+          Text(verbatim: detail)
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+      }
+    case nil:
+      Text("Sends a one-token request to check the key, Base URL and model.")
+    }
+  }
+
+  private func testConnection() async {
+    isTestingConnection = true
+    connectionResult = nil
+    let result = await BYOKConnectionTester.test(apiKey: apiKey, baseURL: baseURL, model: model)
+    connectionResult = result
+    isTestingConnection = false
+    if case .success = result {
+      AppTheme.Haptics.playSuccessNotification()
+    }
+  }
 
   private var appVersion: String {
     Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.1"
@@ -174,6 +214,27 @@ struct SettingsView: View {
               }
             }
           }
+
+          // MARK: - Connection Test
+          Section {
+            Button {
+              Task { await testConnection() }
+            } label: {
+              HStack {
+                Label("Test Connection", systemImage: "bolt.horizontal.circle")
+                Spacer()
+                if isTestingConnection {
+                  ProgressView()
+                }
+              }
+            }
+            .disabled(isTestingConnection)
+          } footer: {
+            connectionResultView
+          }
+          .onChange(of: apiKey) { _, _ in connectionResult = nil }
+          .onChange(of: baseURL) { _, _ in connectionResult = nil }
+          .onChange(of: model) { _, _ in connectionResult = nil }
 
           if selectedProvider == .custom {
             Section {
