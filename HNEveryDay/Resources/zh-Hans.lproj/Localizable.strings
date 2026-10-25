@@ -192,3 +192,10 @@
 "The provider returned a server error (%lld)." = "服务商返回服务器错误（%lld）。";
 "The server responded, but not like an OpenAI-compatible API. Check the Base URL." = "服务器有响应，但不是 OpenAI 兼容接口，请检查 Base URL。";
 "The request failed (%lld)." = "请求失败（%lld）。";
+
+/* Agent latency */
+"Thinking…" = "思考中…";
+"Thinking… %llds" = "思考中… %lld 秒";
+"Try Again" = "重试";
+"The AI is taking too long to respond. Please try again." = "AI 响应超时，请重试。";
+"Long discussions take a little longer… %llds" = "讨论较长，需要多一点时间… %lld 秒";

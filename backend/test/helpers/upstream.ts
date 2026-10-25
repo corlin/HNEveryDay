@@ -66,6 +66,7 @@ export function mockUpstream(llm: (call: LlmCall) => Response | Promise<Response
       const match = /\/item\/(\d+)\.json$/.exec(url.pathname);
       if (match) return Response.json(hnItem(Number(match[1])));
       if (url.pathname.endsWith("/topstories.json")) return Response.json([101, 102, 103]);
+      if (/\/(new|best|ask|show)stories\.json$/.test(url.pathname)) return Response.json([102, 104]);
     }
     if (url.hostname === "llm.test") {
       const call = (await request.json()) as LlmCall;

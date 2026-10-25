@@ -284,6 +284,10 @@ struct ItemDetailView: View {
         group.addTask { await loadComments() }
         group.addTask { await loadArticleContent() }
       }
+      // Warm the Agent's suggested questions while the user reads.
+      if isAgentEnabled {
+        AgentQuestionStore.shared.prefetch(agentContext)
+      }
     }
     // Force comments mode if no URL
     .onAppear {

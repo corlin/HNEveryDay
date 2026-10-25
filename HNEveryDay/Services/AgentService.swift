@@ -87,7 +87,7 @@ nonisolated enum AgentService {
     let questions: [AgentQuestion]
   }
 
-  private static var currentLanguage: String {
+  static var currentLanguage: String {
     ReadingLanguage.resolvedCode(
       preferredLanguage: UserDefaults.standard.string(forKey: "preferred_language") ?? "system")
   }
@@ -95,7 +95,7 @@ nonisolated enum AgentService {
   /// Story-specific starter questions, generated once per story and language by the backend and shared
   /// by everyone (free, not counted toward quotas). BYOK mode sends only the public story id, and generates
   /// locally with the user's key when the backend is unreachable.
-  static func questions(context: AgentContext) async throws -> [AgentQuestion] {
+  static func questions(context: AgentContext, allowLocalFallback: Bool = true) async throws -> [AgentQuestion] {
     let lang = currentLanguage
     let hosted = AIMode.current == .hosted
     do {
@@ -107,9 +107,9 @@ nonisolated enum AgentService {
           article_text: hosted ? context.articleText.map { String($0.prefix(12_000)) } : nil
         )
       )
-      if !response.questions.isEmpty { return response.questions }
+      if !response.questions.isEmpty || !allowLocalFallback { return response.questions }
     } catch {
-      if hosted { throw error }
+      if hosted || !allowLocalFallback { throw error }
     }
     let content = try await BYOKAIProvider.sendChatCompletion(
       credentials: try BYOKAIProvider.credentials(),

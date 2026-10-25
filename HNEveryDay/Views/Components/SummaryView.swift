@@ -21,6 +21,7 @@ struct SummaryView: View {
   @State private var quotaKind: String?
   @State private var showPaywall = false
   @State private var reported = false
+  @State private var loadingStartedAt = Date()
 
   init(
     item: HNItem,
@@ -133,6 +134,15 @@ struct SummaryView: View {
       Text("Analyzing discussion...", comment: "AI loading state")
         .font(.subheadline)
         .foregroundStyle(.secondary)
+      TimelineView(.periodic(from: loadingStartedAt, by: 1)) { timeline in
+        let seconds = Int(timeline.date.timeIntervalSince(loadingStartedAt))
+        if seconds >= 5 {
+          Text("Long discussions take a little longer… \(seconds)s")
+            .font(.caption)
+            .foregroundStyle(.tertiary)
+            .monospacedDigit()
+        }
+      }
     }
     .frame(maxWidth: .infinity, minHeight: 190)
     .background(.ultraThinMaterial)

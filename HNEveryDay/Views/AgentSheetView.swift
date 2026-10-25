@@ -86,19 +86,17 @@ struct AgentSheetView: View {
 
   private var chips: some View {
     VStack(alignment: .leading, spacing: 8) {
-      Text("Quick questions")
-        .font(.caption.weight(.semibold))
-        .foregroundStyle(.secondary)
-      if model.isLoadingSuggestions {
-        ForEach(0..<3, id: \.self) { _ in
-          RoundedRectangle(cornerRadius: 10)
-            .fill(Color.primary.opacity(0.06))
-            .frame(height: 38)
+      HStack(spacing: 6) {
+        Text("Quick questions")
+        if model.isLoadingSuggestions {
+          ProgressView()
+            .controlSize(.mini)
+            .accessibilityLabel(Text("Loading questions"))
         }
-        .accessibilityLabel(Text("Loading questions"))
-      } else {
-        chipList(model.suggestions)
       }
+      .font(.caption.weight(.semibold))
+      .foregroundStyle(.secondary)
+      chipList(model.suggestions)
     }
   }
 
@@ -143,7 +141,7 @@ struct AgentSheetView: View {
     case .assistant:
       VStack(alignment: .leading, spacing: 6) {
         if message.visibleText.isEmpty {
-          ProgressView().controlSize(.small)
+          thinkingIndicator
         } else {
           MarkdownContentView(content: message.visibleText)
         }
@@ -177,11 +175,43 @@ struct AgentSheetView: View {
     }
   }
 
+  /// Shown until the first words arrive; after a few seconds it says how long it has been waiting.
+  private var thinkingIndicator: some View {
+    HStack(spacing: 8) {
+      ProgressView().controlSize(.small)
+      if let since = model.waitingSince {
+        TimelineView(.periodic(from: since, by: 1)) { timeline in
+          let seconds = Int(timeline.date.timeIntervalSince(since))
+          Group {
+            if seconds >= 3 {
+              Text("Thinking… \(seconds)s")
+            } else {
+              Text("Thinking…")
+            }
+          }
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .monospacedDigit()
+        }
+      }
+    }
+  }
+
   private func errorCard(_ error: String) -> some View {
     VStack(alignment: .leading, spacing: 8) {
       Text(error)
         .font(.caption)
         .foregroundStyle(.secondary)
+      if model.retryableQuestion != nil {
+        Button {
+          model.retry()
+        } label: {
+          Label("Try Again", systemImage: "arrow.clockwise")
+            .font(.subheadline.weight(.semibold))
+        }
+        .buttonStyle(.bordered)
+        .tint(.orange)
+      }
       if model.quotaExceeded && StoreManager.shared.isPaywallAvailable {
         Button {
           showPaywall = true

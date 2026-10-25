@@ -42,8 +42,10 @@ export async function fetchItem(id: number): Promise<HNItem | null> {
   return (await response.json()) as HNItem | null;
 }
 
-export async function fetchTopStoryIds(limit: number): Promise<number[]> {
-  const response = await fetch(`${HN_API}/topstories.json`);
+export type StoryList = "top" | "new" | "best" | "ask" | "show";
+
+export async function fetchStoryIds(list: StoryList, limit: number): Promise<number[]> {
+  const response = await fetch(`${HN_API}/${list}stories.json`);
   if (!response.ok) return [];
   return ((await response.json()) as number[]).slice(0, limit);
 }
@@ -145,4 +147,27 @@ export async function fetchComments(
     for (const reply of replies[i]) push(reply, 1);
   });
   return out;
+}
+
+type CommentOptions = Parameters<typeof fetchComments>[1];
+const DISCUSSION_TTL_SECONDS = 300;
+
+/**
+ * A story's comment digest, cached at the edge for a few minutes. Every Agent turn needs it, and
+ * fetching ~40 items from Hacker News is the slowest step before the first token.
+ */
+export async function storyDiscussion(storyId: number, options: CommentOptions): Promise<CommentText[]> {
+  const key = new Request(
+    `https://cache.hneveryday.internal/discussion/${storyId}?m=${options.maxComments}&e=${options.maxCharsEach}&t=${options.maxCharsTotal}`,
+  );
+  const cache = (globalThis as { caches?: { default?: Cache } }).caches?.default;
+  const hit = await cache?.match(key).catch(() => undefined);
+  if (hit) return (await hit.json()) as CommentText[];
+
+  const item = await fetchItem(storyId);
+  const comments = item ? await fetchComments(item, options) : [];
+  await cache
+    ?.put(key, Response.json(comments, { headers: { "cache-control": `max-age=${DISCUSSION_TTL_SECONDS}` } }))
+    .catch(() => {});
+  return comments;
 }

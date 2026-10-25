@@ -1,7 +1,9 @@
 import type { Env } from "./env";
 import { listVar } from "./env";
-import { translateTitles } from "./generation";
-import { fetchTopStoryIds, getStories } from "./hn";
+import { agentQuestions, translateTitles } from "./generation";
+import { HttpError } from "./http";
+import { fetchStoryIds, getStories, type StoryList, type StoryRow } from "./hn";
+import { getOutputs } from "./outputs";
 import { isSupportedLanguage, PROMPT_VERSIONS } from "./prompts";
 import { utcDay } from "./quota";
 
@@ -38,14 +40,67 @@ export async function cleanupStaleOutputs(env: Env, now = Date.now()): Promise<v
   ]);
 }
 
-/** Pulls the current front page into the hot window and pre-translates its titles. */
+/**
+ * What the hourly cron pre-processes. Titles are cheap (~30 tokens each), so every list a reader is
+ * likely to scroll gets them. Agent questions cost ~2k tokens, so only stories that already have a
+ * real discussion get them, busiest first. "new" is left to on-demand requests: it churns every few
+ * minutes and most of its stories never get traction. Summaries are never prewarmed: the server has
+ * no article text, and a comment-only summary would be cached for everyone.
+ */
+export const PREWARM_PLAN = {
+  titles: { top: 30, best: 30, ask: 15, show: 15 } as Partial<Record<StoryList, number>>,
+  questions: {
+    /** Minimum comment count per list; Ask HN is discussion by nature, so its bar is lower. */
+    minComments: { top: 20, best: 20, ask: 10 } as Partial<Record<StoryList, number>>,
+    perRun: 10,
+  },
+};
+
+/** Pulls the configured lists into the hot window, pre-translates titles and pre-generates Agent questions. */
 export async function prewarm(env: Env): Promise<void> {
-  const ids = await fetchTopStoryIds(30);
+  const lists = Object.entries(PREWARM_PLAN.titles) as [StoryList, number][];
+  const fetched = await Promise.all(lists.map(([list, limit]) => fetchStoryIds(list, limit).catch(() => [])));
+  const byList = new Map(lists.map(([list], i) => [list, fetched[i]]));
+  const ids = [...new Set(fetched.flat())];
   if (ids.length === 0) return;
-  await getStories(env, ids);
-  for (const lang of listVar(env.PREWARM_LANGS).filter(isSupportedLanguage)) {
-    await translateTitles(env, ids, lang);
+  const stories = await getStories(env, ids);
+
+  const langs = listVar(env.PREWARM_LANGS).filter(isSupportedLanguage);
+  for (const lang of langs) {
+    for (let i = 0; i < ids.length; i += 30) await translateTitles(env, ids.slice(i, i + 30), lang);
   }
+  await prewarmAgentQuestions(env, selectQuestionCandidates(byList, stories), langs);
+}
+
+/** Stories worth pre-generating questions for, busiest discussion first. */
+export function selectQuestionCandidates(byList: Map<StoryList, number[]>, stories: Map<number, StoryRow>): number[] {
+  const picked = new Set<number>();
+  for (const [list, minComments] of Object.entries(PREWARM_PLAN.questions.minComments) as [StoryList, number][]) {
+    for (const id of byList.get(list) ?? []) {
+      if ((stories.get(id)?.descendants ?? 0) >= minComments) picked.add(id);
+    }
+  }
+  return [...picked].sort((a, b) => (stories.get(b)?.descendants ?? 0) - (stories.get(a)?.descendants ?? 0));
+}
+
+/** Generates missing questions for `candidates` (in order), at most PREWARM_PLAN.questions.perRun per run. */
+export async function prewarmAgentQuestions(env: Env, candidates: number[], langs: string[]): Promise<number> {
+  let generated = 0;
+  for (const lang of langs) {
+    const existing = await getOutputs(env, "questions", lang, candidates);
+    for (const id of candidates) {
+      if (existing.has(id)) continue;
+      if (generated >= PREWARM_PLAN.questions.perRun) return generated;
+      try {
+        await agentQuestions(env, id, lang);
+        generated++;
+      } catch (error) {
+        console.warn("question prewarm failed", id, String(error));
+        if (error instanceof HttpError && error.code === "budget_exhausted") return generated;
+      }
+    }
+  }
+  return generated;
 }
 
 export async function runScheduled(env: Env): Promise<void> {

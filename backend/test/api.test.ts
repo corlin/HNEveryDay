@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { issueDeviceToken } from "../src/auth/token";
 import { assertFeatureEnabled, defaultConfig, resetConfigCache } from "../src/config";
-import { archiveExpiredStories, runScheduled } from "../src/cron";
+import { archiveExpiredStories, prewarmAgentQuestions, runScheduled, selectQuestionCandidates } from "../src/cron";
 import type { Env } from "../src/env";
 import { HttpError } from "../src/http";
 import { PROMPT_VERSIONS } from "../src/prompts";
@@ -213,6 +213,18 @@ describe("agent questions", () => {
     expect(me.quotas.agent.used).toBe(0);
   });
 
+  it("reuses the cached discussion across Agent turns", async () => {
+    const { spy } = mockUpstream();
+    const { token } = await attestedToken();
+    const id = storyId();
+    const hnCalls = () => spy.mock.calls.filter(([input]) => String(input instanceof Request ? input.url : input).includes(`/item/`)).length;
+    const turn = () => call("/api/v1/agent/chat", { token, body: { story_id: id, lang: "en", messages: [{ role: "user", content: "hi" }] } }).then((r) => r.text());
+    await turn();
+    const afterFirst = hnCalls();
+    await turn();
+    expect(hnCalls()).toBe(afterFirst);
+  });
+
   it("asks the agent for follow-up questions", async () => {
     const { llmCalls } = mockUpstream();
     const { token } = await attestedToken();
@@ -405,11 +417,37 @@ describe("cron", () => {
     expect(await E.DB.prepare("SELECT content FROM ai_outputs WHERE story_id = ?").bind(id).first()).toEqual({ content: "Old!" });
   });
 
+  it("picks question candidates by per-list comment thresholds, busiest first", () => {
+    const row = (id: number, descendants: number) => [id, { id, title: "t", url: null, by: null, score: 1, descendants, time: 0 }] as const;
+    const stories = new Map([row(1, 25), row(2, 15), row(3, 300), row(4, 12)]);
+    const byList = new Map([
+      ["top", [1, 2]],
+      ["ask", [4]],
+      ["best", [3]],
+      ["new", [2]],
+    ] as const);
+    expect(selectQuestionCandidates(byList as never, stories as never)).toEqual([3, 1, 4]);
+  });
+
+  it("prewarms Agent questions once", async () => {
+    const { llmCalls } = mockUpstream();
+    const id = storyId();
+    await E.DB.prepare("INSERT INTO stories (id, title, url, by, score, descendants, time, fetched_at) VALUES (?, 'Busy', NULL, 'x', 300, 120, ?, 0)")
+      .bind(id, Math.floor(Date.now() / 1000))
+      .run();
+    expect(await prewarmAgentQuestions(E, [id], ["zh-Hans"])).toBe(1);
+    expect(await prewarmAgentQuestions(E, [id], ["zh-Hans"])).toBe(0);
+    expect(llmCalls).toHaveLength(1);
+  });
+
   it("prewarms front page titles", async () => {
     const { llmCalls } = mockUpstream();
     await runScheduled(E);
     expect(llmCalls.length).toBeGreaterThanOrEqual(1);
     const row = await E.DB.prepare("SELECT content FROM ai_outputs WHERE story_id = 101 AND kind = 'title' AND lang = 'zh-Hans'").first();
     expect(row).toEqual({ content: "译 Story 101" });
+    // Titles from the other configured lists are prewarmed too.
+    const ask = await E.DB.prepare("SELECT content FROM ai_outputs WHERE story_id = 104 AND kind = 'title' AND lang = 'zh-Hans'").first();
+    expect(ask).toEqual({ content: "译 Story 104" });
   });
 });

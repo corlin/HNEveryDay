@@ -3,7 +3,7 @@ import { coalescedSummary } from "../coalescer";
 import { assertFeatureEnabled, loadConfig } from "../config";
 import type { Env } from "../env";
 import { HttpError, json, optionalString, readJson, requireStoryId, requireString } from "../http";
-import { fetchComments, fetchItem, getStory } from "../hn";
+import { getStory, storyDiscussion } from "../hn";
 import { chatCompletion, openChatStream, parseChatStream, type ChatMessage } from "../llm";
 import { blockedAmong, getOutput } from "../outputs";
 import { AGENT_MAX_HISTORY, agentSystemPrompt, articleTranslationMessages, isSupportedLanguage } from "../prompts";
@@ -161,8 +161,7 @@ export async function handleAgentChat(request: Request, env: Env, ctx: Execution
 
   let upstream: ReadableStream<Uint8Array>;
   try {
-    const item = await fetchItem(storyId);
-    const comments = item ? await fetchComments(item, { maxComments: 40, maxCharsEach: 600, maxCharsTotal: 24_000 }) : [];
+    const comments = await storyDiscussion(storyId, { maxComments: 40, maxCharsEach: 600, maxCharsTotal: 24_000 });
     upstream = await openChatStream(env, [{ role: "system", content: agentSystemPrompt(story, comments, articleText, lang) }, ...history], {
       temperature: 0.4,
       maxTokens: 1500,

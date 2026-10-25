@@ -7,6 +7,7 @@
 
 import Foundation
 import Observation
+import SwiftUI
 
 struct AgentMessage: Identifiable, Equatable {
   enum Role: String { case user, assistant }
@@ -71,16 +72,28 @@ final class AgentViewModel {
   private(set) var isStreaming = false
   private(set) var remaining: Int?
   private(set) var limit: Int?
-  private(set) var suggestions: [AgentChip] = []
+  /// Generic chips show immediately; story-specific ones replace them as soon as they arrive.
+  private(set) var suggestions: [AgentChip]
   private(set) var isLoadingSuggestions = false
+  /// Set while an answer has been requested but no text has arrived yet.
+  private(set) var waitingSince: Date?
   var errorMessage: String?
   var quotaExceeded = false
+  /// The question to resend when the last attempt failed for a transient reason.
+  private(set) var retryableQuestion: String?
 
   @ObservationIgnored private let context: AgentContext
   @ObservationIgnored private var streamTask: Task<Void, Never>?
+  @ObservationIgnored private var watchdog: Task<Void, Never>?
+
+  /// Give up when no text has arrived after this long.
+  static let firstTokenTimeout: TimeInterval = 30
+  /// Streamed text is applied to the UI at most this often, so long answers don't re-render per token.
+  static let renderInterval: TimeInterval = 0.06
 
   init(context: AgentContext) {
     self.context = context
+    suggestions = AgentQuestionStore.shared.cached(for: context)?.map(AgentChip.init) ?? AgentChip.fallback
   }
 
   var canSend: Bool { !isStreaming }
@@ -91,13 +104,21 @@ final class AgentViewModel {
     return last.followUps.map { AgentChip(icon: "arrow.turn.down.right", title: $0) }
   }
 
-  /// Loads story-specific starter questions; falls back to generic ones when generation fails.
+  /// Replaces the generic chips with story-specific ones; keeps the generic ones if that fails or is slow.
   func loadSuggestions() async {
-    guard suggestions.isEmpty, !isLoadingSuggestions else { return }
+    guard AgentQuestionStore.shared.cached(for: context) == nil, !isLoadingSuggestions else { return }
     isLoadingSuggestions = true
-    defer { isLoadingSuggestions = false }
-    let questions = (try? await AgentService.questions(context: context)) ?? []
-    suggestions = questions.isEmpty ? AgentChip.fallback : questions.map(AgentChip.init)
+    let questions = await AgentQuestionStore.shared.questions(for: context)
+    isLoadingSuggestions = false
+    if !questions.isEmpty {
+      withAnimation(AppTheme.Spring.snappy) { suggestions = questions.map(AgentChip.init) }
+    }
+  }
+
+  func retry() {
+    guard let question = retryableQuestion, !isStreaming else { return }
+    if messages.last?.role == .user, messages.last?.text == question { messages.removeLast() }
+    send(question)
   }
 
   func send(_ text: String) {
@@ -106,14 +127,18 @@ final class AgentViewModel {
 
     errorMessage = nil
     quotaExceeded = false
+    retryableQuestion = nil
     messages.append(AgentMessage(role: .user, text: question))
     let history = messages.map { AgentTurn(role: $0.role.rawValue, content: $0.visibleText) }
     messages.append(AgentMessage(role: .assistant, text: ""))
     let replyId = messages[messages.count - 1].id
     isStreaming = true
+    waitingSince = Date()
     AppTheme.Haptics.playLightImpact()
 
     streamTask = Task { [context] in
+      var pending = ""
+      var lastFlush = Date.distantPast
       do {
         for try await event in AgentService.stream(context: context, history: history) {
           switch event {
@@ -121,27 +146,48 @@ final class AgentViewModel {
             self.remaining = remaining
             self.limit = limit
           case .delta(let text):
-            self.append(text, to: replyId)
+            pending += text
+            // First text shows at once; after that, batch updates.
+            if self.waitingSince != nil || Date().timeIntervalSince(lastFlush) >= Self.renderInterval {
+              self.waitingSince = nil
+              self.append(pending, to: replyId)
+              pending = ""
+              lastFlush = Date()
+            }
           case .done:
             break
           }
         }
       } catch is CancellationError {
-        // Stopped by the user; keep what was produced.
+        // Stopped by the user or the watchdog; keep what was produced.
       } catch {
         if (error as NSError).code != NSURLErrorCancelled {
-          self.fail(error, replyId: replyId)
+          self.fail(error, question: question, replyId: replyId)
         }
       }
+      if !pending.isEmpty { self.append(pending, to: replyId) }
+      self.watchdog?.cancel()
+      self.waitingSince = nil
       self.isStreaming = false
       self.dropEmptyReply(replyId)
+    }
+
+    watchdog?.cancel()
+    watchdog = Task { [weak self] in
+      try? await Task.sleep(nanoseconds: UInt64(Self.firstTokenTimeout * 1_000_000_000))
+      guard let self, !Task.isCancelled, self.waitingSince != nil else { return }
+      self.streamTask?.cancel()
+      self.errorMessage = String(localized: "The AI is taking too long to respond. Please try again.")
+      self.retryableQuestion = question
     }
   }
 
   /// Stops generation; the partial answer stays. The turn still counts toward today's allowance.
   func stop() {
+    watchdog?.cancel()
     streamTask?.cancel()
     streamTask = nil
+    waitingSince = nil
     isStreaming = false
   }
 
@@ -150,6 +196,7 @@ final class AgentViewModel {
     messages.removeAll()
     errorMessage = nil
     quotaExceeded = false
+    retryableQuestion = nil
   }
 
   private func append(_ text: String, to id: UUID) {
@@ -163,12 +210,16 @@ final class AgentViewModel {
     }
   }
 
-  private func fail(_ error: Error, replyId: UUID) {
+  private func fail(_ error: Error, question: String, replyId: UUID) {
     if let serviceError = error as? AIServiceError, serviceError.isQuotaExceeded {
       quotaExceeded = true
       remaining = 0
       // Let the user retry the same question after upgrading.
       if let last = messages.lastIndex(where: { $0.role == .user }) { messages.remove(at: last) }
+    } else if case .contentBlocked? = error as? AIServiceError {
+      retryableQuestion = nil
+    } else {
+      retryableQuestion = question
     }
     errorMessage = error.localizedDescription
   }

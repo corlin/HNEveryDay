@@ -1,6 +1,6 @@
 import type { Env } from "./env";
 import { HttpError } from "./http";
-import { fetchComments, fetchItem, getStories, getStory } from "./hn";
+import { getStories, getStory, storyDiscussion } from "./hn";
 import { chatCompletion } from "./llm";
 import { getOutput, getOutputs, putOutputs } from "./outputs";
 import { agentQuestionsMessages, parseAgentQuestions, parseTitleBatch, summaryMessages, titleBatchMessages, type AgentQuestion } from "./prompts";
@@ -26,8 +26,7 @@ export async function generateSummary(env: Env, job: SummaryJob): Promise<Summar
   await assertBudget(env);
   const story = await getStory(env, job.storyId);
   if (!story) throw new HttpError(404, "story_not_found", "Story not found");
-  const item = await fetchItem(job.storyId);
-  const comments = item ? await fetchComments(item, { maxComments: 20, maxCharsEach: 300, maxCharsTotal: 6000 }) : [];
+  const comments = await storyDiscussion(job.storyId, { maxComments: 20, maxCharsEach: 300, maxCharsTotal: 6000 });
 
   const result = await chatCompletion(env, summaryMessages(story, comments, job.articleText, job.lang), {
     temperature: 0.5,
@@ -52,8 +51,7 @@ export async function agentQuestions(
   await assertBudget(env);
   const story = await getStory(env, storyId);
   if (!story) throw new HttpError(404, "story_not_found", "Story not found");
-  const item = await fetchItem(storyId);
-  const comments = item ? await fetchComments(item, { maxComments: 20, maxCharsEach: 300, maxCharsTotal: 6000 }) : [];
+  const comments = await storyDiscussion(storyId, { maxComments: 20, maxCharsEach: 300, maxCharsTotal: 6000 });
 
   const result = await chatCompletion(env, agentQuestionsMessages(story, comments, articleText, lang), {
     temperature: 0.8,
