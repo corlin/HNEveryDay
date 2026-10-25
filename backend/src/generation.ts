@@ -3,7 +3,17 @@ import { HttpError } from "./http";
 import { getStories, getStory, storyDiscussion } from "./hn";
 import { chatCompletion } from "./llm";
 import { getOutput, getOutputs, putOutputs } from "./outputs";
-import { agentQuestionsMessages, parseAgentQuestions, parseTitleBatch, summaryMessages, titleBatchMessages, type AgentQuestion } from "./prompts";
+import {
+  agentQuestionsMessages,
+  articleTranslationMessages,
+  parseAgentQuestions,
+  parseArticleTranslation,
+  parseTitleBatch,
+  summaryMessages,
+  titleBatchMessages,
+  type AgentQuestion,
+  type ArticleTranslation,
+} from "./prompts";
 import { assertBudget, recordUsage, type UsageSource } from "./quota";
 
 export interface SummaryJob {
@@ -36,6 +46,38 @@ export async function generateSummary(env: Env, job: SummaryJob): Promise<Summar
   const summary = result.content.trim();
   await putOutputs(env, "summary", job.lang, new Map([[job.storyId, summary]]));
   return { summary, cached: false };
+}
+
+export interface ArticleJob {
+  /** Without a story id the translation is generated but not cached. */
+  storyId?: number;
+  lang: string;
+  title: string;
+  articleText: string;
+}
+
+export interface ArticleResult extends ArticleTranslation {
+  cached: boolean;
+}
+
+/** Translates an article, shared through ai_outputs per story and language. Call via the coalescer when storyId is set. */
+export async function generateArticleTranslation(env: Env, job: ArticleJob): Promise<ArticleResult> {
+  if (job.storyId !== undefined) {
+    const existing = await getOutput(env, "article", job.lang, job.storyId);
+    if (existing) return { ...(JSON.parse(existing) as ArticleTranslation), cached: true };
+  }
+  await assertBudget(env);
+  const completion = await chatCompletion(env, articleTranslationMessages(job.title, job.articleText, job.lang), {
+    temperature: 0.2,
+    maxTokens: 8000,
+  });
+  await recordUsage(env, "article", completion.usage);
+  const translation = parseArticleTranslation(completion.content, job.title);
+  if (!translation) throw new HttpError(502, "upstream_error", "Translation failed");
+  if (job.storyId !== undefined) {
+    await putOutputs(env, "article", job.lang, new Map([[job.storyId, JSON.stringify(translation)]]));
+  }
+  return { ...translation, cached: false };
 }
 
 /** Story-specific starter questions for the Agent; cached like titles and not charged to quotas. */

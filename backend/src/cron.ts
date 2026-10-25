@@ -11,6 +11,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export const HOT_WINDOW_DAYS = 30;
 const STALE_OUTPUT_DAYS = 90;
 const USAGE_RETENTION_DAYS = 7;
+/** Shared full-article translations are a copy of third-party work; keep them only while the story is hot. */
+export const ARTICLE_RETENTION_DAYS = 30;
 
 /** Moves stories older than the hot window into the minimal archive. AI outputs are untouched. */
 export async function archiveExpiredStories(env: Env, now = Date.now()): Promise<number> {
@@ -34,6 +36,7 @@ export async function cleanupStaleOutputs(env: Env, now = Date.now()): Promise<v
         "DELETE FROM ai_outputs WHERE kind = ? AND (prompt_version <> ? OR model <> ?) AND created_at < ?",
       ).bind(kind, version, env.LLM_MODEL, cutoff),
     ),
+    env.DB.prepare("DELETE FROM ai_outputs WHERE kind = 'article' AND created_at < ?").bind(now - ARTICLE_RETENTION_DAYS * DAY_MS),
     env.DB.prepare("DELETE FROM usage_daily WHERE day < ?").bind(utcDay(now - USAGE_RETENTION_DAYS * DAY_MS)),
     env.DB.prepare("DELETE FROM budget_daily WHERE day < ?").bind(utcDay(now - 90 * DAY_MS)),
     env.DB.prepare("DELETE FROM attest_challenges WHERE expires_at < ?").bind(now),

@@ -49,8 +49,8 @@ export function defaultLlm(call: LlmCall): Response {
         { type: "fit", text: "" },
       ],
     });
-  } else if (prompt.includes("translated_markdown")) {
-    content = JSON.stringify({ translated_title: "标题", translated_markdown: "正文" });
+  } else if (prompt.includes("TITLE: <translated title>")) {
+    content = "TITLE: 标题\n\n正文";
   } else {
     content = "## 📝 文章核心\n摘要";
   }

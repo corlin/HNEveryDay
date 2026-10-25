@@ -76,7 +76,8 @@ nonisolated final class BYOKAIProvider: AIProvider {
         ChatMessage(role: "system", content: "You translate technical articles faithfully for Hacker News readers."),
         ChatMessage(role: "user", content: prompt),
       ],
-      temperature: 0.2
+      temperature: 0.2,
+      timeout: AIDefaults.articleTranslationTimeout
     )
     return try AIService.decodeArticleTranslation(response)
   }
@@ -150,9 +151,11 @@ nonisolated final class BYOKAIProvider: AIProvider {
   static func sendChatCompletion(
     credentials: Credentials,
     messages: [ChatMessage],
-    temperature: Double
+    temperature: Double,
+    timeout: TimeInterval? = nil
   ) async throws -> String {
-    let request = try makeRequest(credentials: credentials, messages: messages, temperature: temperature)
+    var request = try makeRequest(credentials: credentials, messages: messages, temperature: temperature)
+    if let timeout { request.timeoutInterval = timeout }
 
     var lastError: Error?
     for attempt in 1...3 {
@@ -178,6 +181,8 @@ nonisolated final class BYOKAIProvider: AIProvider {
         if Task.isCancelled || (error as NSError).code == NSURLErrorCancelled {
           throw error
         }
+        // A timeout means the provider may still be generating (and billing); don't start another.
+        if (error as? URLError)?.code == .timedOut { throw error }
         print("⚠️ Attempt \(attempt) failed: \(error.localizedDescription)")
         lastError = error
         if attempt < 3 {

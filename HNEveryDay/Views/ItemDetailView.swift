@@ -28,6 +28,7 @@ struct ItemDetailView: View {
   @State private var translatedArticleTitle: String?
   @State private var translatedArticleMarkdown: String?
   @State private var isTranslatingArticle = false
+  @State private var translationStartedAt = Date()
   @State private var translationError: String?
   @State private var translationQuotaExceeded = false
   @State private var showPaywall = false
@@ -325,9 +326,19 @@ struct ItemDetailView: View {
       HStack(spacing: 8) {
         ProgressView()
           .controlSize(.mini)
-        Text("Translating article...")
+        TimelineView(.periodic(from: translationStartedAt, by: 1)) { timeline in
+          let seconds = Int(timeline.date.timeIntervalSince(translationStartedAt))
+          Group {
+            if seconds >= 10 {
+              Text("Translating article… \(seconds)s, long articles can take a minute")
+            } else {
+              Text("Translating article...")
+            }
+          }
           .font(.caption)
           .foregroundStyle(.secondary)
+          .monospacedDigit()
+        }
         Spacer(minLength: 0)
       }
       .padding(.horizontal, 14)
@@ -499,16 +510,19 @@ struct ItemDetailView: View {
 
   private func toggleArticleTranslation() async {
     if showTranslatedArticle {
-      await MainActor.run {
-        withAnimation { showTranslatedArticle = false }
-      }
+      withAnimation { showTranslatedArticle = false }
       return
     }
 
+    if translatedArticleMarkdown == nil,
+      let cached = DataService.shared.fetchArticleTranslation(id: currentItem.id, targetLanguage: targetLanguage)
+    {
+      translatedArticleTitle = cached.title
+      translatedArticleMarkdown = cached.markdown
+    }
+
     if translatedArticleMarkdown != nil {
-      await MainActor.run {
-        withAnimation { showTranslatedArticle = true }
-      }
+      withAnimation { showTranslatedArticle = true }
       return
     }
 
@@ -517,14 +531,15 @@ struct ItemDetailView: View {
   }
 
   private func generateArticleTranslation(for article: ParsedArticle, item: HNItem) async {
+    // One translation at a time: repeated taps (or auto mode plus a tap) must not start, and pay for, another.
+    guard !isTranslatingArticle else { return }
     let articleText = article.textContent ?? HTMLHelper.stripTags(article.contentHTML ?? "")
     guard !articleText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
-    await MainActor.run {
-      isTranslatingArticle = true
-      translationError = nil
-      translationQuotaExceeded = false
-    }
+    isTranslatingArticle = true
+    translationError = nil
+    translationQuotaExceeded = false
+    translationStartedAt = Date()
 
     do {
       let result = try await AIService.shared.translateArticle(

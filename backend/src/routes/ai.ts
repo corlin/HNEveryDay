@@ -1,14 +1,14 @@
 import { authenticate } from "../auth/token";
-import { coalescedSummary } from "../coalescer";
+import { coalescedArticle, coalescedSummary } from "../coalescer";
 import { assertFeatureEnabled, loadConfig } from "../config";
 import type { Env } from "../env";
 import { HttpError, json, optionalString, readJson, requireStoryId, requireString } from "../http";
 import { getStory, storyDiscussion } from "../hn";
-import { chatCompletion, openChatStream, parseChatStream, type ChatMessage, type TokenUsage } from "../llm";
+import { openChatStream, parseChatStream, type ChatMessage, type TokenUsage } from "../llm";
 import { blockedAmong, getOutput } from "../outputs";
-import { AGENT_MAX_HISTORY, agentSystemPrompt, articleTranslationMessages, isSupportedLanguage } from "../prompts";
+import { AGENT_MAX_HISTORY, agentSystemPrompt, isSupportedLanguage } from "../prompts";
 import { assertBudget, consumeQuota, recordUsage, refundQuota, resolveTier, usageToday, quotaLimit } from "../quota";
-import { agentQuestions, translateTitles } from "../generation";
+import { agentQuestions, generateArticleTranslation, translateTitles } from "../generation";
 
 function requireLanguage(value: unknown): string {
   if (!isSupportedLanguage(value)) throw new HttpError(400, "unsupported_language", "lang is not supported");
@@ -69,7 +69,10 @@ export async function handleSummary(request: Request, env: Env): Promise<Respons
   }
 }
 
-/** POST /api/v1/translate/article { story_id?, title, lang, article_text } -> { title, markdown }. Never cached server-side. */
+/**
+ * POST /api/v1/translate/article { story_id?, title, lang, article_text } -> { title, markdown, cached, quota? }.
+ * With a story id the translation is shared per story and language; cache hits are free.
+ */
 export async function handleTranslateArticle(request: Request, env: Env): Promise<Response> {
   const config = await loadConfig(env);
   assertFeatureEnabled(config, "article_translation", request);
@@ -78,30 +81,27 @@ export async function handleTranslateArticle(request: Request, env: Env): Promis
   const lang = requireLanguage(body.lang);
   const title = requireString(body.title, "title", 500);
   const articleText = requireString(body.article_text, "article_text", 40_000).slice(0, 8000);
-  if (body.story_id !== undefined) await assertNotBlocked(env, requireStoryId(body.story_id));
+  const storyId = body.story_id === undefined || body.story_id === null ? undefined : requireStoryId(body.story_id);
+  if (storyId !== undefined) {
+    await assertNotBlocked(env, storyId);
+    const cached = await getOutput(env, "article", lang, storyId);
+    if (cached) return json({ ...(JSON.parse(cached) as { title: string; markdown: string }), cached: true });
+  }
   await assertBudget(env);
 
   const tier = await resolveTier(env, principal.sub);
   const grant = await consumeQuota(env, request, principal, tier, "article", config);
   try {
-    const completion = await chatCompletion(env, articleTranslationMessages(title, articleText, lang), {
-      temperature: 0.2,
-      maxTokens: 4000,
-      json: true,
-    });
-    await recordUsage(env, "article", completion.usage);
-    const start = completion.content.indexOf("{");
-    const end = completion.content.lastIndexOf("}");
-    const parsed = JSON.parse(completion.content.slice(start, end + 1)) as { translated_title?: string; translated_markdown?: string };
-    if (!parsed.translated_title || !parsed.translated_markdown) throw new Error("malformed translation");
-    return json({
-      title: parsed.translated_title,
-      markdown: parsed.translated_markdown,
-      quota: { kind: "article", limit: grant.limit, remaining: grant.remaining },
-    });
+    const job = { storyId, lang, title, articleText };
+    const result = storyId !== undefined ? await coalescedArticle(env, { ...job, storyId }) : await generateArticleTranslation(env, job);
+    // Joined another reader's in-flight translation: do not charge for it.
+    if (result.cached) await refundQuota(env, grant);
+    const remaining = result.cached ? grant.remaining + 1 : grant.remaining;
+    return json({ title: result.title, markdown: result.markdown, cached: result.cached, quota: { kind: "article", limit: grant.limit, remaining } });
   } catch (error) {
     await refundQuota(env, grant);
     if (error instanceof HttpError) throw error;
+    console.error("article translation failed", String(error));
     throw new HttpError(502, "upstream_error", "Translation failed");
   }
 }

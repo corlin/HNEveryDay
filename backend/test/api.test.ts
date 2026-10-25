@@ -7,7 +7,7 @@ import type { Env } from "../src/env";
 import { HttpError } from "../src/http";
 import { toTokenUsage } from "../src/llm";
 import { estimateCost } from "../src/routes/admin";
-import { PROMPT_VERSIONS } from "../src/prompts";
+import { parseArticleTranslation, PROMPT_VERSIONS } from "../src/prompts";
 import { utcDay } from "../src/quota";
 import { setTrustedRootForTesting } from "../src/subscription/jws";
 import { anonymousDevice, call } from "./helpers/client";
@@ -248,16 +248,49 @@ describe("content safety", () => {
 });
 
 describe("article translation", () => {
-  it("translates without caching and counts quota", async () => {
+  it("shares translations per story and language, charging only the first reader", async () => {
+    const { llmCalls } = mockUpstream();
+    const a = await attestedToken();
+    const b = await attestedToken();
+    const id = storyId();
+    const body = { story_id: id, title: "Hello", lang: "zh-Hans", article_text: "Some article" };
+    const first = (await (await call("/api/v1/translate/article", { token: a.token, body })).json()) as { title: string; markdown: string; cached: boolean };
+    expect(first).toMatchObject({ title: "标题", markdown: "正文", cached: false });
+    const again = (await (await call("/api/v1/translate/article", { token: a.token, body })).json()) as { cached: boolean };
+    const other = (await (await call("/api/v1/translate/article", { token: b.token, body })).json()) as { cached: boolean; markdown: string };
+    expect(again.cached).toBe(true);
+    expect(other).toMatchObject({ cached: true, markdown: "正文" });
+    expect(llmCalls).toHaveLength(1);
+    const usage = async (token: string) =>
+      ((await (await call("/api/v1/me", { token })).json()) as { quotas: { article: { used: number } } }).quotas.article.used;
+    expect(await usage(a.token)).toBe(1);
+    expect(await usage(b.token)).toBe(0);
+  });
+
+  it("translates without a story id but does not cache it", async () => {
     const { llmCalls } = mockUpstream();
     const { token } = await attestedToken();
     const body = { title: "Hello", lang: "zh-Hans", article_text: "Some article" };
-    const first = (await (await call("/api/v1/translate/article", { token, body })).json()) as { title: string; markdown: string };
-    expect(first).toMatchObject({ title: "标题", markdown: "正文" });
+    await call("/api/v1/translate/article", { token, body });
     await call("/api/v1/translate/article", { token, body });
     expect(llmCalls).toHaveLength(2);
-    const count = await E.DB.prepare("SELECT COUNT(*) AS n FROM ai_outputs WHERE kind NOT IN ('title', 'summary', 'questions')").first<{ n: number }>();
-    expect(count?.n).toBe(0);
+  });
+
+  it("refunds the allowance when translation fails", async () => {
+    mockUpstream(() => new Response("boom", { status: 500 }));
+    const { token } = await attestedToken();
+    const failed = await call("/api/v1/translate/article", { token, body: { story_id: storyId(), title: "Hello", lang: "en", article_text: "x" } });
+    expect(failed.status).toBe(502);
+    const me = (await (await call("/api/v1/me", { token })).json()) as { quotas: { article: { used: number } } };
+    expect(me.quotas.article.used).toBe(0);
+  });
+
+  it("parses plain-text, fenced and legacy JSON output", () => {
+    expect(parseArticleTranslation("TITLE: 标题\n\n# 正文\n内容", "x")).toEqual({ title: "标题", markdown: "# 正文\n内容" });
+    expect(parseArticleTranslation("**TITLE:** 标题\n\n```markdown\n正文\n```", "x")).toEqual({ title: "标题", markdown: "正文" });
+    expect(parseArticleTranslation('{"translated_title":"T","translated_markdown":"M"}', "x")).toEqual({ title: "T", markdown: "M" });
+    expect(parseArticleTranslation("只有正文", "原标题")).toEqual({ title: "原标题", markdown: "只有正文" });
+    expect(parseArticleTranslation("  ", "x")).toBeNull();
   });
 });
 

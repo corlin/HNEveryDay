@@ -86,7 +86,7 @@
                 <li><strong>网页浏览：</strong>
                     当您点击信息链接时，本应用会通过内置浏览器（WebView）加载第三方网页。第三方网站可能会使用 Cookies 或收集您的访问信息，请您参考该第三方网站的隐私政策。</li>
                 <li><strong>AI 功能（托管模式，默认）：</strong>
-                    使用标题翻译、摘要、全文翻译或 Agent 时，相关文章标识、您设备上提取的正文摘录以及您输入的问题会发送到 HNEveryDay 服务器（运行于 Cloudflare），再由服务器转发给模型服务商（DeepSeek）生成结果。标题翻译与摘要会作为公共内容缓存在服务器上；全文译文和 Agent 对话<strong>不会</strong>在服务器上保存。</li>
+                    使用标题翻译、摘要、全文翻译或 Agent 时，相关文章标识、您设备上提取的正文摘录以及您输入的问题会发送到 HNEveryDay 服务器（运行于 Cloudflare），再由服务器转发给模型服务商（DeepSeek）生成结果。标题翻译、摘要和全文译文会作为公共内容缓存在服务器上（全文译文最多保留 30 天），不与您的身份关联；Agent 对话<strong>不会</strong>在服务器上保存。</li>
                 <li><strong>匿名设备标识：</strong>
                     为防止滥用并计算每日额度，应用会通过 Apple App Attest 生成一个与您身份无关的匿名设备标识。我们不收集姓名、邮箱、Apple ID 或广告标识符。</li>
                 <li><strong>订阅：</strong>
@@ -167,8 +167,9 @@
                     When you use title translation, summaries, article translation or the Agent, the story id, an
                     article excerpt extracted on your device and the questions you type are sent to the HNEveryDay
                     server (running on Cloudflare), which forwards them to the model provider (DeepSeek). Title
-                    translations and summaries are cached on the server as shared content; article translations and
-                    Agent conversations are <strong>not</strong> stored on the server.</li>
+                    translations, summaries and article translations are cached on the server as shared content
+                    (article translations for at most 30 days), not linked to you; Agent conversations are
+                    <strong>not</strong> stored on the server.</li>
                 <li><strong>Anonymous device identifier:</strong>
                     To prevent abuse and count daily allowances, the App creates an anonymous device identifier with
                     Apple App Attest. It is not linked to your identity. We do not collect names, email addresses,

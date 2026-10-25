@@ -78,7 +78,9 @@ nonisolated final class HostedAIProvider: AIProvider {
         title: String(title.prefix(500)),
         lang: targetLanguage,
         article_text: String(articleText.prefix(8_000))
-      )
+      ),
+      timeout: AIDefaults.articleTranslationTimeout,
+      retryOnNetworkError: false
     )
     return AIArticleTranslation(title: response.title, markdown: response.markdown)
   }

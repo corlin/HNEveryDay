@@ -127,7 +127,7 @@ flowchart TD
 | 标题翻译 | ✅ 不计额度 | ✅ 不计额度 | 成本低、命中率高；仅受设备限流约束 |
 | 单篇摘要（缓存命中） | ✅ 不计额度 | ✅ 不计额度 | |
 | 单篇摘要（需新生成） | **10 篇/天** | **200 篇/天**（公平使用） | Cron 预热的热帖通常命中缓存 |
-| 全文翻译 | **3 篇/天** | **50 篇/天** | 版权原因**不在服务端缓存**全文译文，只在本地缓存 |
+| 全文翻译 | **3 篇/天** | **50 篇/天** | 译文按文章 × 语言在服务端缓存共享（2026-10-25 改），命中不计额度；只保留 30 天 |
 | Agent（Smart Chips + 追问） | **3 轮/天** 真实体验 | **50 轮/天** 正常速度，超出后**降速**（两轮间隔 ≥ 120 秒），**硬上限 200 轮/天** | 一轮 = 一次提问请求 |
 | 30 天趋势检索 | — | 阶段 4 视数据决定 | |
 | Pro 图标与主题 | — | 阶段 4 | |
@@ -302,7 +302,7 @@ CREATE TABLE story_archive (
 | POST | `/api/v1/auth/anonymous` | 不支持 App Attest 的设备（模拟器等）换取受限令牌；`ATTEST_MODE=enforce` 时关闭 |
 | POST | `/api/v1/translate/titles` | `{lang, ids[]}`（≤ 50）→ `{translations: {id: title}}`；后端从 HN 拉标题 |
 | POST | `/api/v1/summary` | `{story_id, lang, article_text?}` → `{summary, cached}` |
-| POST | `/api/v1/translate/article` | `{story_id?, title, lang, article_text}` → `{title, markdown}`；不缓存 |
+| POST | `/api/v1/translate/article` | `{story_id?, title, lang, article_text}` → `{title, markdown, cached}`；带 story_id 时按文章 × 语言缓存共享，命中免费；同文章并发请求合并为一次生成 |
 | POST | `/api/v1/agent/chat` | `{story_id, lang, messages[], article_text?}` → SSE |
 | POST | `/api/v1/agent/questions` | `{story_id, lang, article_text?}` → `{questions: [{type, text}], cached}`；按 story × lang 缓存共享，不计额度 |
 | POST | `/api/v1/subscription/verify` | `{signed_transaction}` → `{tier, expires_at, product_id}` |
@@ -410,7 +410,7 @@ event: error  data: {"code": "upstream_error", "message": "..."}
    * **跨境数据**：Worker 运行在 Cloudflare 全球网络，中国用户请求可能经境外节点再转发到 DeepSeek。当前只传文章摘录与提问、不含个人身份信息，风险较低；若监管或审核要求数据境内处理，可为中国区单独部署境内转发服务（例如阿里云函数计算），客户端按地区切换 Base URL。
 2. **数据流向与隐私标签**：托管模式下，文章摘录与 Agent 提问经 Cloudflare 发往模型服务商（DeepSeek）。隐私政策与 App Store 隐私标签需写明第三方处理方与用途；**服务端不存储 Agent 对话**；设备令牌为匿名标识，不关联 Apple ID 以外的个人信息。
 3. **宪章**：`.specify/memory/constitution.md` 升级到 v2.0.0：托管后端与托管模型服务商列为批准处理方；BYOK 的密钥仍须存钥匙串。
-4. **版权**：服务端只缓存标题翻译与摘要，不缓存全文译文；所有 AI 内容附原文链接。
+4. **版权**：标题翻译、摘要和全文译文都在服务端缓存共享（全文译文按用户决定于 2026-10-25 改为共享）。全文译文相当于对第三方文章的再分发，风险高于摘要，因此：只缓存 HN 收录的公开文章、只保留 30 天（Cron 清理）、始终附原文链接并标注“AI 翻译”、收到权利人投诉时用 `/api/v1/admin/takedown` 按文章下线。
 5. **AI 免责与举报**：免责声明 + 举报入口 + 管理员按 story 下线。
 
 ---

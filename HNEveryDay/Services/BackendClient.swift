@@ -45,12 +45,20 @@ actor BackendClient {
     return URLSession(configuration: configuration)
   }()
 
+  /// - Parameters:
+  ///   - timeout: Overrides the 30 s default for slow generations (e.g. full-article translation).
+  ///   - retryOnNetworkError: Set to false for expensive, charged requests: a timeout usually means the
+  ///     server is still working, and resending would start (and bill) a second generation.
   func post<Body: Encodable & Sendable, Response: Decodable & Sendable>(
     _ path: String,
     body: Body,
-    authenticated: Bool = true
+    authenticated: Bool = true,
+    timeout: TimeInterval? = nil,
+    retryOnNetworkError: Bool = true
   ) async throws -> Response {
-    let data = try await send(path, method: "POST", body: try JSONEncoder().encode(body), authenticated: authenticated)
+    let data = try await send(
+      path, method: "POST", body: try JSONEncoder().encode(body), authenticated: authenticated,
+      timeout: timeout, retryOnNetworkError: retryOnNetworkError)
     return try JSONDecoder().decode(Response.self, from: data)
   }
 
@@ -93,10 +101,18 @@ actor BackendClient {
     return request
   }
 
-  private func send(_ path: String, method: String, body: Data?, authenticated: Bool) async throws -> Data {
+  private func send(
+    _ path: String,
+    method: String,
+    body: Data?,
+    authenticated: Bool,
+    timeout: TimeInterval? = nil,
+    retryOnNetworkError: Bool = true
+  ) async throws -> Data {
     var lastError: Error = AIServiceError.requestFailed(status: 0, message: "Request failed")
     for attempt in 0..<3 {
-      let request = try await makeRequest(path, method: method, body: body, authenticated: authenticated)
+      var request = try await makeRequest(path, method: method, body: body, authenticated: authenticated)
+      if let timeout { request.timeoutInterval = timeout }
       do {
         let (data, response) = try await session.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -114,7 +130,7 @@ actor BackendClient {
       } catch {
         if Task.isCancelled { throw error }
         lastError = AIServiceError.requestFailed(status: 0, message: error.localizedDescription)
-        if attempt == 2 { break }
+        if attempt == 2 || !retryOnNetworkError { break }
       }
       try await Task.sleep(nanoseconds: UInt64(500_000_000 * (attempt + 1)))
     }

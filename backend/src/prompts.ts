@@ -3,7 +3,7 @@
 import type { ChatMessage } from "./llm";
 import type { CommentText, StoryRow } from "./hn";
 
-export const PROMPT_VERSIONS = { title: 1, summary: 1, questions: 1 } as const;
+export const PROMPT_VERSIONS = { title: 1, summary: 1, questions: 1, article: 2 } as const;
 export type OutputKind = keyof typeof PROMPT_VERSIONS;
 
 interface Language {
@@ -129,7 +129,10 @@ Rules:
 - Preserve the author's meaning and uncertainty. Do not add new opinions.
 - Keep product names, code, API names, commands, URLs, and library names unchanged.
 - Convert the article body to clean Markdown.
-- Return JSON only: {"translated_title": "...", "translated_markdown": "..."}
+- Output format (plain text, no JSON, no code fence around the whole output):
+TITLE: <translated title>
+
+<translated article in Markdown>
 
 <untrusted>
 Title: ${title}
@@ -143,6 +146,38 @@ ${articleText.slice(0, 8000)}
 /** Mirrored in the iOS app (AgentService.followUpsRule); the client strips the block and shows chips. */
 export const FOLLOW_UPS_RULE =
   "After your answer, add exactly this block with 3 short follow-up questions the reader is likely to ask next, specific to this story and conversation, in the answer language:\n<followups>\nquestion\nquestion\nquestion\n</followups>";
+
+export interface ArticleTranslation {
+  title: string;
+  markdown: string;
+}
+
+/**
+ * Reads "TITLE: ...\n\n<markdown>". Plain text survives a cut-off reply far better than JSON;
+ * the old JSON shape is still accepted.
+ */
+export function parseArticleTranslation(content: string, fallbackTitle: string): ArticleTranslation | null {
+  const trimmed = content.trim();
+  if (trimmed.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(trimmed.slice(0, trimmed.lastIndexOf("}") + 1)) as { translated_title?: unknown; translated_markdown?: unknown };
+      if (typeof parsed.translated_title === "string" && typeof parsed.translated_markdown === "string" && parsed.translated_markdown.trim()) {
+        return { title: parsed.translated_title.trim(), markdown: parsed.translated_markdown.trim() };
+      }
+    } catch {
+      // Fall through to the plain-text format.
+    }
+  }
+  const match = /^\s*(?:\*\*)?TITLE:(?:\*\*)?\s*(.*)$/im.exec(trimmed);
+  let title = fallbackTitle;
+  let markdown = trimmed;
+  if (match && match.index !== undefined) {
+    title = match[1].replace(/^#+\s*/, "").trim() || fallbackTitle;
+    markdown = (trimmed.slice(0, match.index) + trimmed.slice(match.index + match[0].length)).trim();
+  }
+  markdown = markdown.replace(/^```(?:markdown)?\n([\s\S]*?)\n```$/, "$1").trim();
+  return markdown ? { title, markdown } : null;
+}
 
 export const AGENT_MAX_HISTORY = 20; // messages (10 turns)
 
