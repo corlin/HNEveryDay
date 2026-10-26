@@ -15,6 +15,8 @@ struct StoryRowView: View {
   var translatedTitle: String?
   var isTranslatingTitle: Bool = false
 
+  @ScaledMetric(relativeTo: .subheadline) private var scoreColumnWidth: CGFloat = 38
+
   var body: some View {
     HStack(alignment: .top, spacing: 12) {
       scoreColumn
@@ -22,33 +24,30 @@ struct StoryRowView: View {
     }
     .padding(.horizontal, 11)
     .padding(.vertical, 9)
-    .background(rowBackground)
+    .background(rowBackground, in: RoundedRectangle(cornerRadius: AppTheme.Radius.row))
     .overlay(alignment: .leading) {
       if isSaved {
         RoundedRectangle(cornerRadius: 1.5)
-          .fill(Color.orange)
+          .fill(AppTheme.Palette.brand)
           .frame(width: 3)
           .padding(.vertical, 10)
       }
     }
     .overlay(rowStroke)
     .contentShape(Rectangle())  // Make entire row tappable
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(Text(accessibilityDescription))
   }
 
   private var scoreColumn: some View {
     VStack(alignment: .trailing, spacing: 1) {
       Text(scoreText)
-        .font(.system(size: 14, weight: .bold, design: .monospaced))
-        .foregroundStyle(isRead ? Color.secondary : Color.orange)
+        .font(.system(.subheadline, design: .monospaced, weight: .bold))
+        .foregroundStyle(isRead ? Color.secondary : AppTheme.Palette.brand)
         .lineLimit(1)
         .minimumScaleFactor(0.72)
-
-      Text("pts")
-        .font(.system(size: 8, weight: .semibold, design: .monospaced))
-        .foregroundStyle(.secondary)
-        .lineLimit(1)
     }
-    .frame(width: 38, alignment: .trailing)
+    .frame(width: scoreColumnWidth, alignment: .trailing)
     .padding(.top, 2)
   }
 
@@ -65,13 +64,13 @@ struct StoryRowView: View {
       HStack(alignment: .firstTextBaseline, spacing: 6) {
         if translatedTitle != nil {
           Image(systemName: "sparkles")
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(.orange)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(AppTheme.Palette.brand)
             .accessibilityLabel(Text("AI translation", comment: "Explicit label on machine-translated articles"))
         }
 
         Text(displayTitle)
-          .font(.system(size: 15, weight: isRead ? .regular : .semibold))
+          .font(.subheadline.weight(isRead ? .regular : .semibold))
           .tracking(AppTheme.Typography.titleTracking)
           .foregroundStyle(isRead ? .secondary : .primary)
           .lineLimit(3)
@@ -80,7 +79,7 @@ struct StoryRowView: View {
 
       if let originalTitle {
         Text(originalTitle)
-          .font(.system(size: 12, weight: .regular))
+          .font(.caption)
           .foregroundStyle(.secondary)
           .lineLimit(2)
           .fixedSize(horizontal: false, vertical: true)
@@ -103,23 +102,20 @@ struct StoryRowView: View {
         domainChip
         authorText
         commentCount
-        savedMark
       }
 
       HStack(spacing: 8) {
         timeText
         domainChip
         commentCount
-        savedMark
       }
 
-      HStack(spacing: 3) {
+      HStack(spacing: 8) {
         timeText
         commentCount
-        savedMark
       }
     }
-    .font(.system(size: 11, weight: .medium))
+    .font(.caption2.weight(.medium))
     .tracking(AppTheme.Typography.metadataTracking)
     .foregroundStyle(.secondary)
   }
@@ -127,7 +123,7 @@ struct StoryRowView: View {
   private var timeText: some View {
     Text(item.time.shortTimeAgo)
       .fontDesign(.monospaced)
-      .foregroundStyle(.secondary.opacity(0.78))
+      .foregroundStyle(.secondary)
       .lineLimit(1)
   }
 
@@ -151,19 +147,11 @@ struct StoryRowView: View {
   private var commentCount: some View {
     HStack(spacing: 3) {
       Image(systemName: "bubble.left.and.bubble.right")
-        .font(.system(size: 10, weight: .semibold))
+        .font(.caption2.weight(.semibold))
       Text("\(item.descendants ?? 0)")
         .fontDesign(.monospaced)
     }
     .lineLimit(1)
-  }
-
-  @ViewBuilder
-  private var savedMark: some View {
-    if isSaved {
-      Image(systemName: "bookmark.fill")
-        .foregroundStyle(.orange)
-    }
   }
 
   private var rowBackground: some ShapeStyle {
@@ -171,11 +159,22 @@ struct StoryRowView: View {
   }
 
   private var rowStroke: some View {
-    RoundedRectangle(cornerRadius: 8)
+    RoundedRectangle(cornerRadius: AppTheme.Radius.row)
       .strokeBorder(
-        isSaved ? Color.orange.opacity(0.34) : Color.primary.opacity(0.06),
+        AppTheme.Palette.hairline,
         lineWidth: 1
       )
+  }
+
+  private var accessibilityDescription: String {
+    var parts = [displayTitle]
+    if let score = item.score { parts.append(String(localized: "\(score) points")) }
+    parts.append(String(localized: "\(item.descendants ?? 0) comments"))
+    if let domain = item.url?.hostDomain { parts.append(domain) }
+    parts.append(item.time.shortTimeAgo)
+    if isSaved { parts.append(String(localized: "Saved")) }
+    if isRead { parts.append(String(localized: "Read")) }
+    return parts.joined(separator: ", ")
   }
 
   private var scoreText: String {

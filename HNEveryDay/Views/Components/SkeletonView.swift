@@ -8,60 +8,49 @@
 import SwiftUI
 
 struct SkeletonView: View {
-  @State private var isAnimating = false
-
   var body: some View {
-    VStack(spacing: 16) {
-      ForEach(0..<8, id: \.self) { _ in
-        SkeletonRow()
+    VStack(spacing: 10) {
+      ForEach(0..<8, id: \.self) { index in
+        SkeletonRow(titleWidthFraction: index.isMultiple(of: 3) ? 0.55 : 0.8)
       }
     }
-    .padding(.horizontal)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(Text("Loading"))
   }
 }
 
+/// Same layout as `StoryRowView` (score column, two title lines, metadata), so nothing jumps when stories arrive.
 struct SkeletonRow: View {
+  var titleWidthFraction: CGFloat = 0.8
   @State private var shimmerOffset: CGFloat = -1
+  @ScaledMetric(relativeTo: .subheadline) private var scoreColumnWidth: CGFloat = 38
 
   var body: some View {
     HStack(alignment: .top, spacing: 12) {
-      // Score placeholder
-      VStack(alignment: .trailing, spacing: 4) {
-        RoundedRectangle(cornerRadius: 4)
-          .fill(Color.secondary.opacity(0.2))
-          .frame(width: 35, height: 16)
-        RoundedRectangle(cornerRadius: 4)
-          .fill(Color.secondary.opacity(0.15))
-          .frame(width: 30, height: 12)
+      HStack {
+        Spacer(minLength: 0)
+        bar(width: 26, height: 14, opacity: 0.2)
       }
-      .frame(width: 45)
+      .frame(width: scoreColumnWidth)
+      .padding(.top, 2)
 
-      // Content placeholder
-      VStack(alignment: .leading, spacing: 8) {
-        RoundedRectangle(cornerRadius: 4)
-          .fill(Color.secondary.opacity(0.2))
-          .frame(height: 16)
-        RoundedRectangle(cornerRadius: 4)
-          .fill(Color.secondary.opacity(0.15))
-          .frame(width: 200, height: 16)
-        HStack(spacing: 8) {
-          RoundedRectangle(cornerRadius: 4)
-            .fill(Color.secondary.opacity(0.1))
-            .frame(width: 60, height: 12)
-          RoundedRectangle(cornerRadius: 4)
-            .fill(Color.secondary.opacity(0.1))
-            .frame(width: 80, height: 12)
+      VStack(alignment: .leading, spacing: 7) {
+        bar(height: 14, opacity: 0.2)
+        GeometryReader { geometry in
+          bar(width: geometry.size.width * titleWidthFraction, height: 14, opacity: 0.2)
         }
+        .frame(height: 14)
+        HStack(spacing: 8) {
+          bar(width: 34, height: 10, opacity: 0.12)
+          bar(width: 76, height: 10, opacity: 0.12)
+          bar(width: 30, height: 10, opacity: 0.12)
+        }
+        .padding(.top, 2)
       }
-
-      Spacer()
-
-      // Comments placeholder
-      RoundedRectangle(cornerRadius: 8)
-        .fill(Color.secondary.opacity(0.1))
-        .frame(width: 44, height: 44)
     }
-    .padding(.vertical, 8)
+    .padding(.horizontal, 11)
+    .padding(.vertical, 11)
+    .cardSurface()
     .overlay(
       GeometryReader { geometry in
         LinearGradient(
@@ -78,15 +67,23 @@ struct SkeletonRow: View {
         .blendMode(.overlay)
       }
     )
-    .clipped()
+    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.row))
     .onAppear {
       withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
         shimmerOffset = 2
       }
     }
   }
+
+  private func bar(width: CGFloat? = nil, height: CGFloat, opacity: Double) -> some View {
+    RoundedRectangle(cornerRadius: 4)
+      .fill(Color.secondary.opacity(opacity))
+      .frame(width: width, height: height)
+      .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
+  }
 }
 
 #Preview {
   SkeletonView()
+    .padding()
 }

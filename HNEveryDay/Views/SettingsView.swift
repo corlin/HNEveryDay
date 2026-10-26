@@ -12,6 +12,7 @@ struct SettingsView: View {
   @State private var aiMode: AIMode = AIMode.current
   @State private var modelDisclosure: String?
   @State private var apiKey: String = ""
+  @State private var savedAPIKey: String = ""
   @State private var isTestingConnection = false
   @State private var connectionResult: Result<BYOKConnectionSuccess, BYOKConnectionTestError>?
   @AppStorage("ai_base_url") private var baseURL: String = AIDefaults.baseURL
@@ -19,7 +20,7 @@ struct SettingsView: View {
 
   // General Settings
   @AppStorage("preferred_language") private var preferredLanguage: String = "system"
-  @AppStorage("translation_mode") private var translationMode: String = TranslationMode.off.rawValue
+  @AppStorage("translation_mode") private var translationMode: String = TranslationMode.defaultRawValue
   @AppStorage("cache_retention_days") private var cacheRetentionDays: Int = 30
 
   @Environment(\.dismiss) private var dismiss
@@ -51,7 +52,14 @@ struct SettingsView: View {
     }
   }
 
+  private func saveAPIKey() {
+    guard apiKey != savedAPIKey else { return }
+    _ = KeychainHelper.save(key: "ai_api_key", value: apiKey)
+    savedAPIKey = apiKey
+  }
+
   private func testConnection() async {
+    saveAPIKey()
     isTestingConnection = true
     connectionResult = nil
     let result = await BYOKConnectionTester.test(apiKey: apiKey, baseURL: baseURL, model: model)
@@ -113,7 +121,8 @@ struct SettingsView: View {
     NavigationStack {
       Form {
         // MARK: - Membership
-        if aiMode == .hosted {
+        // Subscribers who switch to their own key still need to manage the subscription.
+        if aiMode == .hosted || StoreManager.shared.isPro {
           ProStatusSection()
         }
 
@@ -166,10 +175,12 @@ struct SettingsView: View {
 
           // MARK: - Credentials
           Section {
+            // Saved when editing ends or Settings closes, not on every keystroke.
             SecureField("sk-...", text: $apiKey)
-              .onChange(of: apiKey) { _, newValue in
-                _ = KeychainHelper.save(key: "ai_api_key", value: newValue)
-              }
+              .textContentType(.password)
+              .autocorrectionDisabled()
+              .textInputAutocapitalization(.never)
+              .onSubmit(saveAPIKey)
           } header: {
             Text("API Key", comment: "Section header")
           } footer: {
@@ -210,7 +221,7 @@ struct SettingsView: View {
               if selectedProvider == .doubao {
                 Text("Note: For Doubao, enter your Endpoint ID (e.g., ep-2024...) here.")
                   .font(.caption2)
-                  .foregroundStyle(.orange)
+                  .foregroundStyle(AppTheme.Palette.brand)
               }
             }
           }
@@ -263,9 +274,11 @@ struct SettingsView: View {
               TranslationMode.auto.rawValue)
           }
 
-          Stepper(
-            "Keep History: \(cacheRetentionDays) Days", value: $cacheRetentionDays, in: 7...90,
-            step: 7)
+          Picker("Keep History", selection: $cacheRetentionDays) {
+            ForEach([7, 14, 30, 60, 90], id: \.self) { days in
+              Text("\(days) Days").tag(days)
+            }
+          }
         } header: {
           Text("General", comment: "Section header")
         } footer: {
@@ -312,9 +325,11 @@ struct SettingsView: View {
         }
       }
     }
+    .onDisappear(perform: saveAPIKey)
     .onAppear {
       // Load API key from Keychain
       apiKey = KeychainHelper.read(key: "ai_api_key") ?? ""
+      savedAPIKey = apiKey
 
       // Detect provider from URL
       if let match = ProviderPreset.allCases.first(where: {

@@ -28,6 +28,13 @@ enum TranslationMode: String, CaseIterable, Identifiable, Sendable {
   case auto
 
   var id: String { rawValue }
+
+  /// Off for English readers; on demand when the device language isn't English, since translation is the main reason
+  /// those readers use the app. Only applies until the reader picks a mode in Settings.
+  nonisolated static var defaultRawValue: String {
+    let code = ReadingLanguage.resolvedCode(preferredLanguage: ReadingLanguage.systemCode)
+    return code == "en" ? TranslationMode.off.rawValue : TranslationMode.onDemand.rawValue
+  }
 }
 
 enum ReadingLanguage: Sendable {

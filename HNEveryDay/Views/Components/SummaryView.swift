@@ -19,6 +19,7 @@ struct SummaryView: View {
   @State private var isLoading = true
   @State private var errorMsg: String?
   @State private var quotaKind: String?
+  @State private var quotaResetAt: Date?
   @State private var showPaywall = false
   @State private var reported = false
   @State private var loadingStartedAt = Date()
@@ -50,6 +51,10 @@ struct SummaryView: View {
 
           if isLoading {
             loadingCard
+          } else if let quotaKind {
+            QuotaLimitCard(kind: quotaKind, resetAt: quotaResetAt) {
+              showPaywall = true
+            }
           } else if let error = errorMsg {
             errorCard(error)
           } else {
@@ -84,12 +89,12 @@ struct SummaryView: View {
   private var summaryHeader: some View {
     VStack(alignment: .leading, spacing: 8) {
       HStack(spacing: 8) {
-        Image(systemName: "sparkles")
-          .font(.system(size: 13, weight: .semibold))
-          .foregroundStyle(.orange)
+        Image(systemName: "list.bullet.clipboard")
+          .font(.footnote.weight(.semibold))
+          .foregroundStyle(AppTheme.Palette.brand)
 
         Text(item.title ?? "Untitled")
-          .font(.system(size: 17, weight: .semibold))
+          .font(.headline)
           .foregroundStyle(.primary)
           .lineLimit(3)
           .fixedSize(horizontal: false, vertical: true)
@@ -113,18 +118,13 @@ struct SummaryView: View {
             .fontDesign(.monospaced)
         }
       }
-      .font(.system(size: 11, weight: .medium))
+      .font(.caption2.weight(.medium))
       .foregroundStyle(.secondary)
     }
     .padding(.horizontal, 14)
     .padding(.vertical, 14)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(.ultraThinMaterial)
-    .clipShape(RoundedRectangle(cornerRadius: 10))
-    .overlay(
-      RoundedRectangle(cornerRadius: 10)
-        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-    )
+    .cardSurface(radius: AppTheme.Radius.card)
   }
 
   private var loadingCard: some View {
@@ -145,22 +145,17 @@ struct SummaryView: View {
       }
     }
     .frame(maxWidth: .infinity, minHeight: 190)
-    .background(.ultraThinMaterial)
-    .clipShape(RoundedRectangle(cornerRadius: 10))
-    .overlay(
-      RoundedRectangle(cornerRadius: 10)
-        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-    )
+    .cardSurface(radius: AppTheme.Radius.card)
   }
 
   private func errorCard(_ error: String) -> some View {
     VStack(alignment: .leading, spacing: 12) {
       HStack(spacing: 8) {
         Image(systemName: "exclamationmark.triangle.fill")
-          .font(.system(size: 14, weight: .semibold))
-          .foregroundStyle(.orange)
+          .font(.subheadline.weight(.semibold))
+          .foregroundStyle(AppTheme.Palette.brand)
 
-        Text(quotaKind == nil ? "AI Service Connection Failed" : "Daily limit reached")
+        Text("AI Service Connection Failed")
           .font(.headline)
       }
 
@@ -169,32 +164,23 @@ struct SummaryView: View {
         .font(.caption)
         .fixedSize(horizontal: false, vertical: true)
 
-      if quotaKind != nil {
-        if StoreManager.shared.isPaywallAvailable {
-          Button {
-            showPaywall = true
-          } label: {
-            Label("Upgrade to HNEveryDay Pro", systemImage: "sparkles")
-              .font(.subheadline.weight(.semibold))
-          }
-          .buttonStyle(.borderedProminent)
-          .tint(.orange)
-        }
-      } else {
-        Text(errorSuggestion)
-          .font(.caption2)
-          .foregroundStyle(.secondary)
+      Text(errorSuggestion)
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+
+      Button {
+        Task { await retry() }
+      } label: {
+        Label("Try Again", systemImage: "arrow.clockwise")
+          .font(.subheadline.weight(.semibold))
       }
+      .buttonStyle(.bordered)
+      .tint(AppTheme.Palette.brand)
     }
     .padding(.horizontal, 14)
     .padding(.vertical, 14)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(Color(.secondarySystemGroupedBackground))
-    .clipShape(RoundedRectangle(cornerRadius: 8))
-    .overlay(
-      RoundedRectangle(cornerRadius: 8)
-        .strokeBorder(Color.orange.opacity(0.24), lineWidth: 1)
-    )
+    .cardSurface(stroke: AppTheme.Palette.brand.opacity(0.24))
   }
 
   private var errorSuggestion: LocalizedStringKey {
@@ -222,12 +208,7 @@ struct SummaryView: View {
       .padding(.horizontal, 14)
       .padding(.vertical, 14)
       .frame(maxWidth: .infinity, alignment: .leading)
-      .background(Color(.secondarySystemGroupedBackground))
-      .clipShape(RoundedRectangle(cornerRadius: 8))
-      .overlay(
-        RoundedRectangle(cornerRadius: 8)
-          .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
-      )
+      .cardSurface()
   }
 
   private func generateSummary() async {
@@ -269,13 +250,22 @@ struct SummaryView: View {
       }
     } catch {
       await MainActor.run {
-        if case .quotaExceeded(let kind, _, _) = error as? AIServiceError {
-          self.quotaKind = kind
+        if case .quotaExceeded(let kind, _, let resetAt) = error as? AIServiceError {
+          self.quotaKind = kind.isEmpty ? "summary" : kind
+          self.quotaResetAt = resetAt
         }
         self.errorMsg = error.localizedDescription
         self.isLoading = false
       }
     }
+  }
+
+  private func retry() async {
+    errorMsg = nil
+    quotaKind = nil
+    isLoading = true
+    loadingStartedAt = Date()
+    await generateSummary()
   }
 
   private var summaryComments: [CommentNode] {

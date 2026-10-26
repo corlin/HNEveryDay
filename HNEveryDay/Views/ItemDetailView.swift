@@ -12,8 +12,12 @@ struct ItemDetailView: View {
 
   @State private var hydratedItem: HNItem?
   @AppStorage("preferred_language") private var preferredLanguage: String = "system"
-  @AppStorage("translation_mode") private var translationModeRaw: String = TranslationMode.off.rawValue
+  @AppStorage("translation_mode") private var translationModeRaw: String = TranslationMode.defaultRawValue
   @State private var selectedMode = 0  // 0 = Article, 1 = Comments
+
+  struct QuotaInfo {
+    let resetAt: Date?
+  }
   @State private var comments: [CommentNode] = []
   @State private var flattenedComments: [CommentNode] = []
   @State private var isLoadingComments = false
@@ -30,7 +34,8 @@ struct ItemDetailView: View {
   @State private var isTranslatingArticle = false
   @State private var translationStartedAt = Date()
   @State private var translationError: String?
-  @State private var translationQuotaExceeded = false
+  @State private var translationQuota: QuotaInfo?
+  @State private var commentsError: String?
   @State private var showPaywall = false
   @State private var showAgent = false
   @State private var isAgentEnabled = true
@@ -75,183 +80,51 @@ struct ItemDetailView: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      // MARK: - Picker
       modePickerBar
 
-      // MARK: - Content
-      TabView(selection: $selectedMode) {
-        // MODIFIED: Article View with Smart Reader
-        Group {
-          if let url = currentItem.urlObj {
-            if showReaderMode, let article = parsedArticle {
-              VStack(spacing: 0) {
-                articleStatusBanner
+      // Both panes stay alive so switching keeps the reader's scroll position and the loaded web page.
+      ZStack {
+        articlePane
+          .opacity(selectedMode == 0 ? 1 : 0)
+          .allowsHitTesting(selectedMode == 0)
+          .accessibilityHidden(selectedMode != 0)
 
-                if showTranslatedArticle, let translatedArticleMarkdown {
-                  TranslatedReaderView(
-                    title: translatedArticleTitle ?? article.title ?? currentItem.title ?? "Untitled",
-                    byline: article.byline ?? article.siteName,
-                    markdown: translatedArticleMarkdown,
-                    targetLanguage: targetLanguage
-                  )
-                  .transition(.opacity)
-                } else {
-                  ReaderView(article: article)
-                    .transition(.opacity)
-                }
-              }
-            } else if showReaderMode && isParsingArticle {
-              VStack {
-                ProgressView {
-                  Text("Optimizing for Reader...", comment: "Reader loading state")
-                }
-                .padding()
-                Text(
-                  "Parsing content locally to remove ads and clutter.",
-                  comment: "Reader explanation"
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-              }
-              .frame(maxWidth: .infinity, maxHeight: .infinity)
-              .background(Color(.systemGroupedBackground))
-            } else {
-              // Fallback to Webview
-              WebView(url: url)
-                .transition(.opacity)
-            }
-          } else if currentItem.text != nil {
-            ScrollView {
-              Text(HTMLHelper.parse(currentItem.text ?? ""))
-                .padding()
-            }
-            .background(Color(.systemGroupedBackground))
-          } else {
-            ContentUnavailableView("No URL", systemImage: "link.badge.plus")
-              .background(Color(.systemGroupedBackground))
-          }
-        }
-        .tag(0)
-
-        // Comments View (Unchanged)
-        Group {
-          if isLoadingComments {
-            ProgressView("Loading Thread...")
-          } else if flattenedComments.isEmpty {
-            ContentUnavailableView("No Comments", systemImage: "bubble.left.and.bubble.right")
-          } else {
-            List {
-              // Header Info
-              VStack(alignment: .leading, spacing: 8) {
-                Text(currentItem.title ?? "")
-                  .font(.headline)
-                  .fixedSize(horizontal: false, vertical: true)
-
-                HStack(spacing: 10) {
-                  Text("\(currentItem.score ?? 0) points")
-                  Text("by \(currentItem.by ?? "")")  // 'by' is hard to localize elegantly in concatenation, will leave as is or use a format string
-                  Text(currentItem.time.shortTimeAgo)
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-              }
-              .padding(.horizontal, 12)
-              .padding(.vertical, 12)
-              .background(Color(.secondarySystemGroupedBackground))
-              .clipShape(RoundedRectangle(cornerRadius: 8))
-              .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                  .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
-              )
-              .listRowSeparator(.hidden)
-              .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 6, trailing: 12))
-              .listRowBackground(Color.clear)
-
-              ForEach(flattenedComments) { node in
-                CommentRowView(node: node, isCollapsed: collapsedCommentIds.contains(node.id))
-                  .listRowSeparator(.hidden)
-                  .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                  .listRowBackground(Color.clear)
-                  .onTapGesture {
-                    toggleCollapse(node.id)
-                  }
-              }
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .background(Color(.systemGroupedBackground))
-          }
-        }
-        .tag(1)
+        commentsPane
+          .opacity(selectedMode == 1 ? 1 : 0)
+          .allowsHitTesting(selectedMode == 1)
+          .accessibilityHidden(selectedMode != 1)
       }
-      .tabViewStyle(.page(indexDisplayMode: .never))  // Swipe left/right
-      .overlay(alignment: .bottomTrailing) {
-        if isAgentEnabled {
-          AskAgentButton { showAgent = true }
-            .padding(16)
-        }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .safeAreaInset(edge: .bottom, spacing: 0) {
+        aiActionBar
       }
       .background(Color(.systemGroupedBackground))
     }
     .background(Color(.systemGroupedBackground))
     .navigationBarTitleDisplayMode(.inline)
     .toolbar {
-      // Reader Toggle
-      if selectedMode == 0 && currentItem.urlObj != nil {
-        ToolbarItem(placement: .topBarTrailing) {
-          Button {
-            withAnimation {
-              showReaderMode.toggle()
-              if !showReaderMode {
-                showTranslatedArticle = false
-              }
-            }
-          } label: {
-            Image(systemName: showReaderMode ? "doc.plaintext.fill" : "globe")
-              .foregroundStyle(showReaderMode ? .orange : .primary)
-          }
-          .accessibilityLabel(showReaderMode ? "Show Web Article" : "Show Reader")
-        }
-      }
-
       if selectedMode == 0 && showReaderMode && parsedArticle != nil && translationMode != .off {
         ToolbarItem(placement: .topBarTrailing) {
           Button {
             Task { await toggleArticleTranslation() }
           } label: {
-            Image(systemName: showTranslatedArticle ? "doc.plaintext" : "translate")
-              .foregroundStyle(showTranslatedArticle ? .orange : .primary)
+            if isTranslatingArticle {
+              ProgressView()
+                .controlSize(.mini)
+            } else {
+              Image(systemName: "translate")
+                .foregroundStyle(showTranslatedArticle ? AppTheme.Palette.brand : Color.primary)
+            }
           }
           .disabled(isTranslatingArticle)
-          .accessibilityLabel(showTranslatedArticle ? "Show Original Article" : "Translate Article")
-        }
-      }
-
-      // Export Button
-      ToolbarItem(placement: .topBarTrailing) {
-        Button {
-          generateExport()
-        } label: {
-          Image(systemName: "square.and.arrow.up")
+          .accessibilityLabel(showTranslatedArticle ? Text("Show Original Article") : Text("Translate Article"))
         }
       }
 
       ToolbarItem(placement: .topBarTrailing) {
-        Button {
-          Task { await presentSummary() }
-        } label: {
-          if isPreparingSummary {
-            ProgressView()
-              .controlSize(.mini)
-          } else {
-            Image(systemName: "sparkles")
-          }
-        }
-        .disabled(isPreparingSummary)
-        .accessibilityLabel("Summarize Discussion")
+        moreMenu
       }
     }
-    // Share Sheet
     .sheet(isPresented: $showPaywall) {
       PaywallView(reason: .quota(kind: "article"))
     }
@@ -300,11 +173,220 @@ struct ItemDetailView: View {
     }
   }
 
+  // MARK: - Panes
+
+  @ViewBuilder
+  private var articlePane: some View {
+    if let url = currentItem.urlObj {
+      if showReaderMode, let article = parsedArticle {
+        VStack(spacing: 0) {
+          articleStatusBanner
+
+          if showTranslatedArticle, let translatedArticleMarkdown {
+            TranslatedReaderView(
+              title: translatedArticleTitle ?? article.title ?? currentItem.title ?? "Untitled",
+              byline: article.byline ?? article.siteName,
+              markdown: translatedArticleMarkdown,
+              targetLanguage: targetLanguage
+            )
+            .transition(.opacity)
+          } else {
+            ReaderView(article: article)
+              .transition(.opacity)
+          }
+        }
+      } else if showReaderMode && isParsingArticle {
+        VStack {
+          ProgressView {
+            Text("Optimizing for Reader...", comment: "Reader loading state")
+          }
+          .padding()
+          Text(
+            "Parsing content locally to remove ads and clutter.",
+            comment: "Reader explanation"
+          )
+          .font(.caption)
+          .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemGroupedBackground))
+      } else {
+        // Fallback to Webview
+        WebView(url: url)
+          .transition(.opacity)
+      }
+    } else if let text = currentItem.text {
+      ScrollView {
+        Text(HTMLHelper.parse(text))
+          .font(.body)
+          .tint(AppTheme.Palette.brand)
+          .textSelection(.enabled)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding()
+      }
+      .background(Color(.systemGroupedBackground))
+    } else {
+      ContentUnavailableView("No URL", systemImage: "link.badge.plus")
+        .background(Color(.systemGroupedBackground))
+    }
+  }
+
+  @ViewBuilder
+  private var commentsPane: some View {
+    if isLoadingComments {
+      ProgressView("Loading Thread...")
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    } else if let commentsError, flattenedComments.isEmpty {
+      ContentUnavailableView {
+        Label("Couldn't Load Comments", systemImage: "wifi.slash")
+      } description: {
+        Text(commentsError)
+      } actions: {
+        Button("Try Again") {
+          Task { await loadComments() }
+        }
+        .buttonStyle(.borderedProminent)
+      }
+    } else if flattenedComments.isEmpty {
+      ContentUnavailableView("No Comments", systemImage: "bubble.left.and.bubble.right")
+    } else {
+      List {
+        // Header Info
+        VStack(alignment: .leading, spacing: 8) {
+          Text(currentItem.title ?? "")
+            .font(.headline)
+            .fixedSize(horizontal: false, vertical: true)
+
+          HStack(spacing: 10) {
+            Text("\(currentItem.score ?? 0) points")
+            Text("by \(currentItem.by ?? "")")
+            Text(currentItem.time.shortTimeAgo)
+          }
+          .font(.caption)
+          .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardSurface()
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 6, trailing: 12))
+        .listRowBackground(Color.clear)
+
+        ForEach(flattenedComments) { node in
+          CommentRowView(
+            node: node,
+            isCollapsed: collapsedCommentIds.contains(node.id),
+            onToggleCollapse: { toggleCollapse(node.id) }
+          )
+          .listRowSeparator(.hidden)
+          .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+          .listRowBackground(Color.clear)
+        }
+      }
+      .listStyle(.plain)
+      .scrollContentBackground(.hidden)
+      .background(Color(.systemGroupedBackground))
+    }
+  }
+
+  // MARK: - Actions
+
+  /// Summary and Ask Agent sit in a bar under the content instead of floating over it.
+  private var aiActionBar: some View {
+    HStack(spacing: 10) {
+      Button {
+        Task { await presentSummary() }
+      } label: {
+        HStack(spacing: 6) {
+          if isPreparingSummary {
+            ProgressView()
+              .controlSize(.small)
+          } else {
+            Image(systemName: "list.bullet.clipboard")
+          }
+          Text("Summary", comment: "Button that opens the AI summary of the article and discussion")
+        }
+        .font(.subheadline.weight(.semibold))
+        .frame(maxWidth: .infinity, minHeight: 36)
+      }
+      .buttonStyle(.bordered)
+      .disabled(isPreparingSummary)
+      .accessibilityLabel("Summarize Discussion")
+
+      if isAgentEnabled {
+        Button {
+          showAgent = true
+        } label: {
+          Label("Ask Agent", systemImage: "bubble.left.and.text.bubble.right")
+            .font(.subheadline.weight(.semibold))
+            .frame(maxWidth: .infinity, minHeight: 36)
+        }
+        .buttonStyle(.borderedProminent)
+      }
+    }
+    .tint(AppTheme.Palette.brand)
+    .padding(.horizontal, 16)
+    .padding(.vertical, 8)
+    .background(.bar)
+    .overlay(alignment: .top) {
+      Rectangle()
+        .fill(AppTheme.Palette.hairline)
+        .frame(height: 1)
+    }
+  }
+
+  /// Less frequent actions, so the navigation bar keeps at most two buttons.
+  private var moreMenu: some View {
+    Menu {
+      if let url = currentItem.urlObj {
+        Button {
+          withAnimation {
+            showReaderMode.toggle()
+            if !showReaderMode {
+              showTranslatedArticle = false
+            }
+          }
+          selectedMode = 0
+        } label: {
+          if showReaderMode {
+            Label("Show Original Web Page", systemImage: "globe")
+          } else {
+            Label("Show Reader", systemImage: "doc.plaintext")
+          }
+        }
+
+        Link(destination: url) {
+          Label("Open in Safari", systemImage: "safari")
+        }
+
+        ShareLink(item: url) {
+          Label("Share Link", systemImage: "square.and.arrow.up")
+        }
+      }
+
+      Button {
+        generateExport()
+      } label: {
+        Label("Export as Markdown", systemImage: "arrow.down.doc")
+      }
+
+      if let hnURL = URL(string: "https://news.ycombinator.com/item?id=\(currentItem.id)") {
+        ShareLink(item: hnURL) {
+          Label("Share HN Discussion", systemImage: "bubble.left.and.bubble.right")
+        }
+      }
+    } label: {
+      Image(systemName: "ellipsis.circle")
+    }
+    .accessibilityLabel("More")
+  }
+
   private var modePickerBar: some View {
     VStack(spacing: 0) {
       Picker("Mode", selection: $selectedMode) {
         Text("Article", comment: "Read mode").tag(0)
-        Text("Comments", comment: "Discussion mode").tag(1)
+        Text(commentsTabTitle).tag(1)
       }
       .pickerStyle(.segmented)
       .padding(.horizontal, 16)
@@ -314,10 +396,17 @@ struct ItemDetailView: View {
     .background(Color(.systemGroupedBackground))
     .overlay(alignment: .bottom) {
       Rectangle()
-        .fill(Color.primary.opacity(0.06))
+        .fill(AppTheme.Palette.hairline)
         .frame(height: 1)
     }
     .zIndex(1)
+  }
+
+  private var commentsTabTitle: String {
+    if let count = currentItem.descendants, count > 0 {
+      return String(localized: "Comments (\(count))")
+    }
+    return String(localized: "Comments")
   }
 
   @ViewBuilder
@@ -343,8 +432,25 @@ struct ItemDetailView: View {
       }
       .padding(.horizontal, 14)
       .padding(.vertical, 9)
-      .background(Color(.secondarySystemGroupedBackground))
-      .clipShape(RoundedRectangle(cornerRadius: 8))
+      .cardSurface()
+      .padding(.horizontal, 12)
+      .padding(.top, 8)
+      .padding(.bottom, 4)
+    } else if let translationQuota {
+      QuotaLimitCard(kind: "article", resetAt: translationQuota.resetAt) {
+        showPaywall = true
+      }
+      .overlay(alignment: .topTrailing) {
+        Button {
+          withAnimation { self.translationQuota = nil }
+        } label: {
+          Image(systemName: "xmark")
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .frame(width: 44, height: 44)
+        }
+        .accessibilityLabel(Text("Close"))
+      }
       .padding(.horizontal, 12)
       .padding(.top, 8)
       .padding(.bottom, 4)
@@ -352,7 +458,7 @@ struct ItemDetailView: View {
       HStack(alignment: .top, spacing: 8) {
         Image(systemName: "exclamationmark.triangle.fill")
           .font(.caption)
-          .foregroundStyle(.orange)
+          .foregroundStyle(AppTheme.Palette.brand)
           .padding(.top, 1)
 
         Text(translationError)
@@ -362,20 +468,15 @@ struct ItemDetailView: View {
 
         Spacer(minLength: 0)
 
-        if translationQuotaExceeded && StoreManager.shared.isPaywallAvailable {
-          Button("Upgrade") { showPaywall = true }
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.orange)
+        Button("Try Again") {
+          Task { await toggleArticleTranslation() }
         }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(AppTheme.Palette.brand)
       }
       .padding(.horizontal, 14)
       .padding(.vertical, 9)
-      .background(Color(.secondarySystemGroupedBackground))
-      .clipShape(RoundedRectangle(cornerRadius: 8))
-      .overlay(
-        RoundedRectangle(cornerRadius: 8)
-          .strokeBorder(Color.orange.opacity(0.22), lineWidth: 1)
-      )
+      .cardSurface(stroke: AppTheme.Palette.brand.opacity(0.22))
       .padding(.horizontal, 12)
       .padding(.top, 8)
       .padding(.bottom, 4)
@@ -538,7 +639,7 @@ struct ItemDetailView: View {
 
     isTranslatingArticle = true
     translationError = nil
-    translationQuotaExceeded = false
+    translationQuota = nil
     translationStartedAt = Date()
 
     do {
@@ -563,8 +664,11 @@ struct ItemDetailView: View {
       }
     } catch {
       await MainActor.run {
-        translationQuotaExceeded = (error as? AIServiceError)?.isQuotaExceeded == true
-        translationError = error.localizedDescription
+        if case .quotaExceeded(_, _, let resetAt)? = error as? AIServiceError {
+          translationQuota = QuotaInfo(resetAt: resetAt)
+        } else {
+          translationError = error.localizedDescription
+        }
       }
     }
 
@@ -600,7 +704,10 @@ struct ItemDetailView: View {
     guard comments.isEmpty else { return }  // already loaded
     guard !isLoadingComments else { return }
 
-    await MainActor.run { isLoadingComments = true }
+    await MainActor.run {
+      isLoadingComments = true
+      commentsError = nil
+    }
     do {
       let loader = CommentLoader()
       let rootNodes = try await loader.loadComments(for: kids)
@@ -614,6 +721,7 @@ struct ItemDetailView: View {
       }
     } catch {
       print("Failed to load comments: \(error)")
+      await MainActor.run { commentsError = error.localizedDescription }
     }
     await MainActor.run { isLoadingComments = false }
   }

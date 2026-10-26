@@ -18,7 +18,7 @@ struct TranslatedReaderView: View {
       VStack(alignment: .leading, spacing: 18) {
         VStack(alignment: .leading, spacing: 10) {
           Text(title)
-            .font(.system(size: 24, weight: .bold))
+            .font(.title2.bold())
             .foregroundStyle(.primary)
             .fixedSize(horizontal: false, vertical: true)
 
@@ -34,7 +34,7 @@ struct TranslatedReaderView: View {
               .frame(width: 3, height: 3)
             Text("AI translation", comment: "Explicit label on machine-translated articles")
           }
-          .font(.system(size: 11, weight: .medium))
+          .font(.caption2.weight(.medium))
           .fontDesign(.monospaced)
           .foregroundStyle(.secondary)
           .padding(.horizontal, 8)
@@ -45,12 +45,7 @@ struct TranslatedReaderView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(
-          RoundedRectangle(cornerRadius: 8)
-            .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
-        )
+        .cardSurface()
 
         MarkdownContentView(content: markdown)
           .padding(.horizontal, 2)

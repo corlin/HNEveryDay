@@ -79,6 +79,8 @@ final class AgentViewModel {
   private(set) var waitingSince: Date?
   var errorMessage: String?
   var quotaExceeded = false
+  /// When the used-up daily allowance comes back, if the server said.
+  private(set) var quotaResetAt: Date?
   /// The question to resend when the last attempt failed for a transient reason.
   private(set) var retryableQuestion: String?
 
@@ -211,8 +213,9 @@ final class AgentViewModel {
   }
 
   private func fail(_ error: Error, question: String, replyId: UUID) {
-    if let serviceError = error as? AIServiceError, serviceError.isQuotaExceeded {
+    if case .quotaExceeded(_, _, let resetAt)? = error as? AIServiceError {
       quotaExceeded = true
+      quotaResetAt = resetAt
       remaining = 0
       // Let the user retry the same question after upgrading.
       if let last = messages.lastIndex(where: { $0.role == .user }) { messages.remove(at: last) }

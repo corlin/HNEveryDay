@@ -45,7 +45,7 @@ struct MarkdownContentView: View {
             id: id,
             view: AnyView(
               Text(text)
-                .font(.system(size: 18, weight: .bold))
+                .font(.headline)
                 .foregroundStyle(.primary)
                 .padding(.top, 8)
             )))
@@ -59,10 +59,10 @@ struct MarkdownContentView: View {
             view: AnyView(
               HStack(alignment: .top, spacing: 8) {
                 Text("•")
-                  .font(.system(size: 16))
-                  .foregroundStyle(.orange)
+                  .font(.body)
+                  .foregroundStyle(AppTheme.Palette.brand)
                 Text(parseBoldText(text))
-                  .font(.system(size: 15))
+                  .font(.subheadline)
                   .foregroundStyle(.primary)
                   .lineSpacing(4)
               }
@@ -76,7 +76,7 @@ struct MarkdownContentView: View {
             id: id,
             view: AnyView(
               Text(parseBoldText(trimmed))
-                .font(.system(size: 15))
+                .font(.subheadline)
                 .foregroundStyle(.primary)
                 .lineSpacing(6)
             )))
@@ -101,7 +101,7 @@ struct MarkdownContentView: View {
       if let boldEnd = afterStart.range(of: "**") {
         let boldText = String(afterStart[..<boldEnd.lowerBound])
         var boldAttr = AttributedString(boldText)
-        boldAttr.font = .system(size: 15, weight: .bold)
+        boldAttr.inlinePresentationIntent = .stronglyEmphasized
         result += boldAttr
         current = String(afterStart[boldEnd.upperBound...])
       } else {

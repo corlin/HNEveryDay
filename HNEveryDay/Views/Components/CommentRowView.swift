@@ -10,7 +10,8 @@ import SwiftUI
 struct CommentRowView: View {
   let node: CommentNode
   var isCollapsed: Bool = false
-  @State private var displayText: String = ""
+  var onToggleCollapse: () -> Void = {}
+  @State private var bodyText: AttributedString?
 
   private var indentation: CGFloat {
     return CGFloat(min(node.depth, 6)) * 14.0
@@ -31,10 +32,17 @@ struct CommentRowView: View {
 
         if isCollapsed {
           collapsedSummary
-        } else if !displayText.isEmpty {
-          commentText(displayText)
+        } else if let bodyText {
+          Text(bodyText)
+            .font(.subheadline)
+            .foregroundStyle(.primary)
+            .tint(AppTheme.Palette.brand)
+            .lineSpacing(3)
+            .textSelection(.enabled)
         } else {
-          commentText("[no content]")
+          Text("[deleted]")
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
         }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
@@ -43,60 +51,57 @@ struct CommentRowView: View {
     .padding(.vertical, 9)
     .padding(.leading, indentation)
     .background(rowBackground)
-    .clipShape(RoundedRectangle(cornerRadius: 8))
+    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.row))
     .overlay(rowStroke)
-    .contentShape(Rectangle())
     .animation(AppTheme.Spring.fluid, value: isCollapsed)
     .onAppear {
-      if let html = node.item.text, !html.isEmpty {
-        displayText = HTMLHelper.stripTags(html)
-      } else {
-        displayText = "[deleted]"
-      }
+      guard bodyText == nil, let html = node.item.text, !html.isEmpty else { return }
+      bodyText = HTMLHelper.attributed(html)
     }
   }
 
+  /// Only the header toggles collapsing, so selecting text and tapping links in the body work normally.
   private var headerRow: some View {
-    HStack(alignment: .firstTextBaseline, spacing: 7) {
-      Text(node.item.by ?? "unknown")
-        .font(.system(size: 12, weight: .semibold))
-        .foregroundStyle(.primary)
-        .lineLimit(1)
-
-      Text(node.item.time.shortTimeAgo)
-        .font(.system(size: 11, weight: .medium, design: .monospaced))
-        .tracking(AppTheme.Typography.metadataTracking)
-        .foregroundStyle(.secondary.opacity(0.82))
-        .lineLimit(1)
-
-      if isCollapsed {
-        Text(hiddenReplyText)
-          .font(.system(size: 11, weight: .semibold))
-          .foregroundStyle(.orange)
+    Button(action: onToggleCollapse) {
+      HStack(alignment: .firstTextBaseline, spacing: 7) {
+        Text(verbatim: node.item.by ?? "unknown")
+          .font(.caption.weight(.semibold))
+          .foregroundStyle(.primary)
           .lineLimit(1)
+
+        Text(node.item.time.shortTimeAgo)
+          .font(.system(.caption2, design: .monospaced, weight: .medium))
+          .tracking(AppTheme.Typography.metadataTracking)
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+
+        if isCollapsed {
+          hiddenReplyText
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(AppTheme.Palette.brand)
+            .lineLimit(1)
+        }
+
+        Spacer(minLength: 0)
+
+        Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
+          .font(.caption2.weight(.semibold))
+          .foregroundStyle(.secondary)
       }
-
-      Spacer(minLength: 0)
-
-      Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
-        .font(.system(size: 10, weight: .semibold))
-        .foregroundStyle(.secondary.opacity(0.7))
+      .frame(minHeight: 28)
+      .contentShape(Rectangle())
     }
+    .buttonStyle(.plain)
+    .accessibilityLabel(Text(verbatim: node.item.by ?? "unknown"))
+    .accessibilityValue(isCollapsed ? Text("Collapsed") : Text("Expanded"))
+    .accessibilityHint(isCollapsed ? Text("Shows this comment and its replies") : Text("Hides this comment and its replies"))
   }
 
   private var collapsedSummary: some View {
-    Text(displayText.isEmpty ? "[collapsed]" : displayText)
-      .font(.system(size: 13))
+    Text(bodyText.map { String($0.characters) } ?? String(localized: "[deleted]"))
+      .font(.footnote)
       .foregroundStyle(.secondary)
       .lineLimit(1)
-  }
-
-  private func commentText(_ text: String) -> some View {
-    Text(text)
-      .font(.system(size: 14))
-      .foregroundStyle(text == "[no content]" ? Color.secondary : Color.primary)
-      .lineSpacing(3)
-      .textSelection(.enabled)
   }
 
   private var rowBackground: some ShapeStyle {
@@ -104,20 +109,20 @@ struct CommentRowView: View {
   }
 
   private var rowStroke: some View {
-    RoundedRectangle(cornerRadius: 8)
+    RoundedRectangle(cornerRadius: AppTheme.Radius.row)
       .strokeBorder(Color.primary.opacity(node.depth == 0 ? 0.06 : 0.04), lineWidth: 1)
   }
 
   private var depthColor: Color {
-    let palette: [Color] = [.orange, .blue, .green, .purple, .pink, .teal]
+    let palette: [Color] = [AppTheme.Palette.brand, .blue, .green, .purple, .pink, .teal]
     return palette[node.depth % palette.count]
   }
 
-  private var hiddenReplyText: String {
+  private var hiddenReplyText: Text {
     let count = node.descendantCount
     if count == 1 {
-      return "1 reply hidden"
+      return Text("1 reply hidden")
     }
-    return "\(count) replies hidden"
+    return Text("\(count) replies hidden")
   }
 }

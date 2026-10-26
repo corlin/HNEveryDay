@@ -9,6 +9,25 @@ import SwiftUI
 import UIKit
 
 public enum AppTheme {
+
+  // MARK: - Color Tokens
+  public enum Palette {
+    /// Brand accent (system orange, matches the AccentColor asset).
+    public static let brand = Color.orange
+    /// Tinted fill behind brand-coloured content (badges, banners, user bubbles).
+    public static let brandFill = Color.orange.opacity(0.12)
+    /// Hairline border around cards and rows.
+    public static let hairline = Color.primary.opacity(0.06)
+  }
+
+  // MARK: - Shape Tokens
+  public enum Radius {
+    /// Feed rows, comment rows, small status banners.
+    public static let row: CGFloat = 8
+    /// Cards and panels (summary, paywall, chips).
+    public static let card: CGFloat = 12
+  }
+
   
   // MARK: - Touch & Gesture Feedback Tokens
   public enum Touch {
@@ -67,6 +86,34 @@ public enum AppTheme {
       generator.prepare()
       generator.notificationOccurred(.success)
     }
+  }
+}
+
+// MARK: - Card Surface
+public struct CardSurface: ViewModifier {
+  var radius: CGFloat
+  var fill: Color
+  var stroke: Color
+
+  public func body(content: Content) -> some View {
+    content
+      .background(fill)
+      .clipShape(RoundedRectangle(cornerRadius: radius))
+      .overlay(
+        RoundedRectangle(cornerRadius: radius)
+          .strokeBorder(stroke, lineWidth: 1)
+      )
+  }
+}
+
+extension View {
+  /// Grouped-background card with a hairline border, the app's standard container.
+  func cardSurface(
+    radius: CGFloat = AppTheme.Radius.row,
+    fill: Color = Color(.secondarySystemGroupedBackground),
+    stroke: Color = AppTheme.Palette.hairline
+  ) -> some View {
+    modifier(CardSurface(radius: radius, fill: fill, stroke: stroke))
   }
 }
 

@@ -36,7 +36,11 @@ struct AgentSheetView: View {
               if !model.followUpChips.isEmpty {
                 chipList(model.followUpChips)
               }
-              if let error = model.errorMessage {
+              if model.quotaExceeded {
+                QuotaLimitCard(kind: "agent", resetAt: model.quotaResetAt) {
+                  showPaywall = true
+                }
+              } else if let error = model.errorMessage {
                 errorCard(error)
               }
               Color.clear.frame(height: 1).id("bottom")
@@ -112,12 +116,7 @@ struct AgentSheetView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(
-              RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-            )
+            .cardSurface(radius: AppTheme.Radius.card)
         }
         .buttonStyle(.tactile)
         .foregroundStyle(.primary)
@@ -135,8 +134,8 @@ struct AgentSheetView: View {
           .font(.subheadline)
           .padding(.horizontal, 12)
           .padding(.vertical, 8)
-          .background(Color.orange.opacity(0.15))
-          .clipShape(RoundedRectangle(cornerRadius: 12))
+          .background(AppTheme.Palette.brandFill)
+          .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
       }
     case .assistant:
       VStack(alignment: .leading, spacing: 6) {
@@ -163,7 +162,7 @@ struct AgentSheetView: View {
       .padding(12)
       .frame(maxWidth: .infinity, alignment: .leading)
       .background(Color(.secondarySystemGroupedBackground))
-      .clipShape(RoundedRectangle(cornerRadius: 12))
+      .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
       .contextMenu {
         Button {
           UIPasteboard.general.string = AIContentLabel.labeled(message.visibleText)
@@ -210,23 +209,12 @@ struct AgentSheetView: View {
             .font(.subheadline.weight(.semibold))
         }
         .buttonStyle(.bordered)
-        .tint(.orange)
-      }
-      if model.quotaExceeded && StoreManager.shared.isPaywallAvailable {
-        Button {
-          showPaywall = true
-        } label: {
-          Label("Upgrade to HNEveryDay Pro", systemImage: "sparkles")
-            .font(.subheadline.weight(.semibold))
-        }
-        .buttonStyle(.borderedProminent)
-        .tint(.orange)
+        .tint(AppTheme.Palette.brand)
       }
     }
     .padding(12)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(Color.orange.opacity(0.08))
-    .clipShape(RoundedRectangle(cornerRadius: 10))
+    .cardSurface(radius: AppTheme.Radius.card, stroke: AppTheme.Palette.brand.opacity(0.24))
   }
 
   private var inputBar: some View {
@@ -247,13 +235,13 @@ struct AgentSheetView: View {
         } label: {
           Image(systemName: "stop.circle.fill").font(.title2)
         }
-        .tint(.orange)
+        .tint(AppTheme.Palette.brand)
         .accessibilityLabel(Text("Stop"))
       } else {
         Button(action: submit) {
           Image(systemName: "arrow.up.circle.fill").font(.title2)
         }
-        .tint(.orange)
+        .tint(AppTheme.Palette.brand)
         .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         .accessibilityLabel(Text("Send"))
       }
@@ -267,24 +255,5 @@ struct AgentSheetView: View {
     let text = input
     input = ""
     model.send(text)
-  }
-}
-
-/// Floating "✨ Ask Agent" capsule for the reader and comments.
-struct AskAgentButton: View {
-  let action: () -> Void
-
-  var body: some View {
-    Button(action: action) {
-      Label("Ask Agent", systemImage: "sparkles")
-        .font(.subheadline.weight(.semibold))
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(.ultraThinMaterial, in: Capsule())
-        .overlay(Capsule().strokeBorder(Color.orange.opacity(0.35), lineWidth: 1))
-        .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
-    }
-    .buttonStyle(.tactile)
-    .foregroundStyle(.orange)
   }
 }

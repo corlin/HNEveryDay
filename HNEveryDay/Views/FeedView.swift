@@ -11,7 +11,7 @@ struct FeedView: View {
   @State private var viewModel = FeedViewModel()
   @ObservedObject private var dataService = DataService.shared
   @AppStorage("preferred_language") private var preferredLanguage: String = "system"
-  @AppStorage("translation_mode") private var translationModeRaw: String = TranslationMode.off.rawValue
+  @AppStorage("translation_mode") private var translationModeRaw: String = TranslationMode.defaultRawValue
   @State private var showSettings = false
   @State private var showingSavedOnly = false
   @State private var translatedTitles: [Int: String] = [:]
@@ -34,7 +34,31 @@ struct FeedView: View {
 
   private let titleTranslationBatchLimit = 8
 
+  private static let feedTypes: [(type: HNClient.StoryType, title: LocalizedStringKey, icon: String)] = [
+    (.top, "Top", "flame"),
+    (.new, "New", "clock"),
+    (.best, "Best", "star"),
+    (.show, "Show", "eye"),
+    (.ask, "Ask", "questionmark.bubble"),
+    (.job, "Jobs", "briefcase"),
+  ]
+
+  private var currentFeedTitle: String {
+    if showingSavedOnly { return String(localized: "Saved") }
+    switch viewModel.selectedFeedType {
+    case .top: return String(localized: "Top")
+    case .new: return String(localized: "New")
+    case .best: return String(localized: "Best")
+    case .show: return String(localized: "Show")
+    case .ask: return String(localized: "Ask")
+    case .job: return String(localized: "Jobs")
+    }
+  }
+
   var body: some View {
+    // Re-render rows when background title translations land.
+    let _ = viewModel.titleTranslationsVersion
+
     NavigationStack {
       List {
         // Show saved stories from cache or live feed
@@ -66,7 +90,7 @@ struct FeedView: View {
                 Button {
                   manuallyTranslateTitle(for: savedItem)
                 } label: {
-                  Label("Translate", systemImage: "sparkles")
+                  Label("Translate", systemImage: "translate")
                 }
                 .tint(.blue)
               }
@@ -98,7 +122,7 @@ struct FeedView: View {
               Button {
                 manuallyTranslateTitle(for: story)
               } label: {
-                Label("Translate", systemImage: "sparkles")
+                Label("Translate", systemImage: "translate")
               }
               .tint(.blue)
             }
@@ -110,13 +134,13 @@ struct FeedView: View {
                 Label(
                   isSaved ? "Unsave" : "Save", systemImage: isSaved ? "bookmark.slash" : "bookmark")
               }
-              .tint(.orange)
+              .tint(AppTheme.Palette.brand)
             }
             .contextMenu {
               Button {
                 manuallyTranslateTitle(for: story)
               } label: {
-                Label("Translate Title", systemImage: "sparkles")
+                Label("Translate Title", systemImage: "translate")
               }
 
               Button {
@@ -136,23 +160,39 @@ struct FeedView: View {
 
           if viewModel.isLoading && viewModel.stories.isEmpty {
             SkeletonView()
+              .listRowInsets(EdgeInsets(top: 5, leading: 12, bottom: 5, trailing: 12))
               .listRowSeparator(.hidden)
               .listRowBackground(Color.clear)
           }
 
           if viewModel.stories.isEmpty && !viewModel.isLoading {
-            ContentUnavailableView(
-              "No Stories Found", systemImage: "wifi.slash",
-              description: Text("Check your connection or try again."))
-              .listRowSeparator(.hidden)
-              .listRowBackground(Color.clear)
+            Group {
+              if let loadError = viewModel.loadError {
+                ContentUnavailableView {
+                  Label("Couldn't Load Stories", systemImage: "wifi.slash")
+                } description: {
+                  Text(loadError)
+                } actions: {
+                  Button("Try Again") {
+                    Task { await viewModel.refresh() }
+                  }
+                  .buttonStyle(.borderedProminent)
+                }
+              } else {
+                ContentUnavailableView(
+                  "No Stories Found", systemImage: "tray",
+                  description: Text("Pull down to refresh."))
+              }
+            }
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
           }
         }
       }
       .listStyle(.plain)
       .scrollContentBackground(.hidden)
       .background(Color(.systemGroupedBackground))
-      .navigationTitle(showingSavedOnly ? "Saved" : "Hacker News")
+      .navigationTitle(currentFeedTitle)
       .navigationBarTitleDisplayMode(.inline)
       .toolbarBackground(Color(.systemGroupedBackground), for: .navigationBar)
       .toolbarBackground(.visible, for: .navigationBar)
@@ -171,42 +211,56 @@ struct FeedView: View {
           .accessibilityLabel("Settings")
         }
 
-        ToolbarItem(placement: .topBarTrailing) {
+        // The title shows the current feed and switches it in one tap.
+        ToolbarItem(placement: .principal) {
           Menu {
-            // Saved Filter Toggle
-            Button {
-              showingSavedOnly.toggle()
-            } label: {
-              Label(
-                showingSavedOnly ? "Show Feed" : "Saved",
-                systemImage: showingSavedOnly ? "list.bullet" : "bookmark.fill")
-            }
-
-            Divider()
-
             Picker(
               "Category",
               selection: Binding(
-                get: { viewModel.selectedFeedType },
+                get: { showingSavedOnly ? nil : viewModel.selectedFeedType },
                 set: { type in
+                  guard let type else { return }
                   showingSavedOnly = false
                   Task { await viewModel.updateFeedType(type) }
                 }
               )
             ) {
-              Label("Top", systemImage: "flame").tag(HNClient.StoryType.top)
-              Label("New", systemImage: "clock").tag(HNClient.StoryType.new)
-              Label("Best", systemImage: "star").tag(HNClient.StoryType.best)
-              Label("Show", systemImage: "eye").tag(HNClient.StoryType.show)
-              Label("Ask", systemImage: "questionmark.circle").tag(HNClient.StoryType.ask)
-              Label("Jobs", systemImage: "briefcase").tag(HNClient.StoryType.job)
+              ForEach(Self.feedTypes, id: \.type) { entry in
+                Label(entry.title, systemImage: entry.icon).tag(Optional(entry.type))
+              }
+            }
+
+            Divider()
+
+            Button {
+              showingSavedOnly = true
+            } label: {
+              Label("Saved", systemImage: "bookmark")
             }
           } label: {
-            Label(
-              "Filter",
-              systemImage: showingSavedOnly ? "bookmark.fill" : "line.3.horizontal.decrease.circle")
+            HStack(spacing: 4) {
+              Text(currentFeedTitle)
+                .font(.headline)
+                .foregroundStyle(.primary)
+              Image(systemName: "chevron.down.circle.fill")
+                .font(.caption)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
           }
-          .accessibilityLabel("Filter")
+          .accessibilityLabel(Text("Feed: \(currentFeedTitle)"))
+          .accessibilityHint(Text("Switches between Top, New, Best and other feeds"))
+        }
+
+        ToolbarItem(placement: .topBarTrailing) {
+          Button {
+            showingSavedOnly.toggle()
+          } label: {
+            Image(systemName: showingSavedOnly ? "bookmark.fill" : "bookmark")
+          }
+          .accessibilityLabel(showingSavedOnly ? Text("Show Feed") : Text("Saved"))
         }
       }
       .sheet(isPresented: $showSettings) {

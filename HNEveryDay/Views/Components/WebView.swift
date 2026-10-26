@@ -19,13 +19,23 @@ struct WebView: UIViewRepresentable {
     return webView
   }
 
+  func makeCoordinator() -> Coordinator {
+    Coordinator()
+  }
+
   func updateUIView(_ uiView: WKWebView, context: Context) {
-    if uiView.url != url {
+    // Load once per URL; comparing with uiView.url would yank the reader back after following a link.
+    if context.coordinator.loadedURL != url {
+      context.coordinator.loadedURL = url
       if url.isFileURL {
         uiView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
       } else {
         uiView.load(URLRequest(url: url))
       }
     }
+  }
+
+  final class Coordinator {
+    var loadedURL: URL?
   }
 }

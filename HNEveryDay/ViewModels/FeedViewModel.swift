@@ -13,6 +13,10 @@ final class FeedViewModel {
   var stories: [HNItem] = []
   var isLoading = false
   var selectedFeedType: HNClient.StoryType = .top
+  /// Set when the last load failed, so the feed can show an error with Retry instead of "no stories".
+  var loadError: String?
+  /// Bumped after background title translations are saved, so visible rows pick them up.
+  var titleTranslationsVersion = 0
 
   // Pagination State
   private var allStoryIds: [Int] = []
@@ -38,6 +42,7 @@ final class FeedViewModel {
   func refresh() async {
     guard !isLoading else { return }
     isLoading = true
+    loadError = nil
     stories = []
     allStoryIds = []
     currentPage = 0
@@ -54,6 +59,7 @@ final class FeedViewModel {
       }
     } catch {
       print("Failed to fetch IDs: \(error)")
+      loadError = error.localizedDescription
     }
 
     isLoading = false
@@ -85,6 +91,9 @@ final class FeedViewModel {
       scheduleBackgroundTitleTranslations(for: validStories)
     } catch {
       print("Failed to load page: \(error)")
+      if stories.isEmpty {
+        loadError = error.localizedDescription
+      }
     }
 
     isFetchingPage = false
@@ -110,12 +119,14 @@ final class FeedViewModel {
   }
 
   private func scheduleBackgroundTitleTranslations(for items: [HNItem]) {
-    let modeRaw = UserDefaults.standard.string(forKey: "title_translation_mode") ?? "auto"
-    guard modeRaw == "auto" else { return }
+    // Same keys as Settings: translation on (on demand or auto) translates titles into the reading language.
+    let modeRaw = UserDefaults.standard.string(forKey: "translation_mode") ?? TranslationMode.defaultRawValue
+    guard (TranslationMode(rawValue: modeRaw) ?? .off) != .off else { return }
 
-    let targetLanguage = UserDefaults.standard.string(forKey: "reading_language_preference") ?? "system"
+    let targetLanguage = ReadingLanguage.resolvedCode(
+      preferredLanguage: UserDefaults.standard.string(forKey: "preferred_language") ?? ReadingLanguage.systemCode)
 
-    Task.detached(priority: .background) {
+    Task.detached(priority: .background) { [weak self] in
       var inputs: [AIService.TitleTranslationInput] = []
 
       for item in items {
@@ -153,10 +164,15 @@ final class FeedViewModel {
               )
             }
           }
+          await self?.titleTranslationsDidChange()
         } catch {
           print("Batch AI translation failed for chunk of \(chunk.count): \(error)")
         }
       }
     }
+  }
+
+  private func titleTranslationsDidChange() {
+    titleTranslationsVersion += 1
   }
 }
