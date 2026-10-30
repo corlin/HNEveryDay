@@ -533,3 +533,28 @@ describe("cron", () => {
     expect(ask).toEqual({ content: "译 Story 104" });
   });
 });
+
+describe("site icons", () => {
+  it("rejects anything that is not a domain", async () => {
+    expect((await call("/api/v1/icon?d=http://evil/x")).status).toBe(400);
+    expect((await call("/api/v1/icon")).status).toBe(400);
+  });
+
+  it("proxies the icon once and serves repeats from the edge cache", async () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(png, { headers: { "content-type": "image/png" } }));
+    const first = await call("/api/v1/icon?d=icons-cached.example.com");
+    expect(first.status).toBe(200);
+    expect(first.headers.get("content-type")).toBe("image/png");
+    expect(new Uint8Array(await first.arrayBuffer())).toEqual(png);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const again = await call("/api/v1/icon?d=icons-cached.example.com");
+    expect(again.status).toBe(200);
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it("answers 404 when the site has no icon", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("nope", { status: 404, headers: { "content-type": "image/png" } }));
+    expect((await call("/api/v1/icon?d=no-icon.example.org")).status).toBe(404);
+  });
+});

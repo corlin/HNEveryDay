@@ -243,6 +243,7 @@ final class AIService: Sendable {
       - Keep product names, code, API names, commands, URLs, and library names unchanged.
       - Use natural technical wording in the target language.
       - Convert the article body to clean Markdown.
+      - Lines like [IMG:3] mark where images go: keep each one unchanged, on its own line, in the same place.
       - Return JSON only, with no code fence and no extra commentary.
 
       JSON schema:

@@ -130,12 +130,15 @@ struct StoryRowView: View {
   @ViewBuilder
   private var domainChip: some View {
     if let domain = item.url?.hostDomain {
-      Text(domain)
-        .lineLimit(1)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
-        .background(Color.primary.opacity(0.055))
-        .clipShape(RoundedRectangle(cornerRadius: 5))
+      HStack(spacing: 0) {
+        SiteIcon(domain: domain)
+        Text(domain)
+          .lineLimit(1)
+      }
+      .padding(.horizontal, 6)
+      .padding(.vertical, 2)
+      .background(Color.primary.opacity(0.055))
+      .clipShape(RoundedRectangle(cornerRadius: 5))
     }
   }
 
@@ -214,4 +217,26 @@ struct StoryRowView: View {
     isSaved: true
   )
   .padding()
+}
+
+/// The site's icon beside its domain. Takes no space until it loads, so sites without an icon
+/// (or a failed request) look exactly like before.
+private struct SiteIcon: View {
+  let domain: String
+  @ScaledMetric(relativeTo: .caption2) private var size: CGFloat = 12
+
+  var body: some View {
+    AsyncImage(url: BackendConfig.iconURL(domain: domain)) { phase in
+      if let image = phase.image {
+        image
+          .resizable()
+          .interpolation(.high)
+          .scaledToFit()
+          .frame(width: size, height: size)
+          .clipShape(RoundedRectangle(cornerRadius: 2.5))
+          .padding(.trailing, 4)
+      }
+    }
+    .accessibilityHidden(true)
+  }
 }

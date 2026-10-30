@@ -3,7 +3,7 @@
 import type { ChatMessage } from "./llm";
 import type { CommentText, StoryRow } from "./hn";
 
-export const PROMPT_VERSIONS = { title: 1, summary: 1, questions: 1, article: 2 } as const;
+export const PROMPT_VERSIONS = { title: 1, summary: 1, questions: 1, article: 3 } as const;
 export type OutputKind = keyof typeof PROMPT_VERSIONS;
 
 interface Language {
@@ -129,6 +129,7 @@ Rules:
 - Preserve the author's meaning and uncertainty. Do not add new opinions.
 - Keep product names, code, API names, commands, URLs, and library names unchanged.
 - Convert the article body to clean Markdown.
+- Lines like [IMG:3] mark where images go: keep each one unchanged, on its own line, in the same place.
 - Output format (plain text, no JSON, no code fence around the whole output):
 TITLE: <translated title>
 

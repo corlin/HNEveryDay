@@ -12,6 +12,8 @@ struct TranslatedReaderView: View {
   let byline: String?
   let markdown: String
   let targetLanguage: String
+  /// The original article's images, for the translation's `[IMG:n]` markers.
+  var images: [URL] = []
 
   var body: some View {
     ScrollView {
@@ -47,7 +49,7 @@ struct TranslatedReaderView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .cardSurface()
 
-        MarkdownContentView(content: markdown)
+        MarkdownContentView(content: markdown, images: images)
           .padding(.horizontal, 2)
       }
       .padding(.horizontal, 12)

@@ -17,6 +17,11 @@ nonisolated enum BackendConfig {
     return URL(string: override.isEmpty ? defaultBaseURL : override)!
   }
 
+  /// Site icon for the feed, proxied and cached by the backend (GET /api/v1/icon).
+  static func iconURL(domain: String) -> URL {
+    baseURL.appending(path: "api/v1/icon").appending(queryItems: [URLQueryItem(name: "d", value: domain)])
+  }
+
   static var appVersion: String {
     Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
   }

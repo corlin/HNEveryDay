@@ -12,6 +12,7 @@ import {
   handleTranslateArticle,
   handleTranslateTitles,
 } from "./routes/ai";
+import { handleIcon } from "./routes/icon";
 import { handleAnonymous, handleAssert, handleAttest, handleChallenge } from "./routes/auth";
 import { handleAppStoreNotification, handleVerifySubscription } from "./routes/subscription";
 
@@ -31,6 +32,7 @@ const routes: Record<string, Handler> = {
   "POST /api/v1/agent/chat": handleAgentChat,
   "POST /api/v1/agent/questions": handleAgentQuestions,
   "GET /api/v1/me": handleMe,
+  "GET /api/v1/icon": handleIcon,
   "POST /api/v1/report": handleReport,
   "POST /api/v1/subscription/verify": handleVerifySubscription,
   "POST /api/v1/appstore/notifications": handleAppStoreNotification,

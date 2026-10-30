@@ -27,6 +27,7 @@ struct ItemDetailView: View {
 
   // Reader Mode State
   @State private var parsedArticle: ParsedArticle?
+  @State private var articleImages: [URL] = []
   @State private var isParsingArticle = false
   @State private var showReaderMode = true  // Default to true
   @State private var translatedArticleTitle: String?
@@ -187,7 +188,8 @@ struct ItemDetailView: View {
               title: translatedArticleTitle ?? article.title ?? currentItem.title ?? "Untitled",
               byline: article.byline ?? article.siteName,
               markdown: translatedArticleMarkdown,
-              targetLanguage: targetLanguage
+              targetLanguage: targetLanguage,
+              images: articleImages
             )
             .transition(.opacity)
           } else {
@@ -550,6 +552,7 @@ struct ItemDetailView: View {
       )
       await MainActor.run {
         self.parsedArticle = article
+        self.articleImages = ArticleImages.urls(in: cachedContent)
       }
       await prepareArticleTranslationIfNeeded(for: article, item: item)
       return
@@ -561,6 +564,7 @@ struct ItemDetailView: View {
       let article = try await WebParser.shared.parse(url: url)
       await MainActor.run {
         self.parsedArticle = article
+        self.articleImages = ArticleImages.urls(in: article.contentHTML ?? "")
         // Save to Persistence
         if let html = article.contentHTML {
           DataService.shared.saveContent(
@@ -634,7 +638,11 @@ struct ItemDetailView: View {
   private func generateArticleTranslation(for article: ParsedArticle, item: HNItem) async {
     // One translation at a time: repeated taps (or auto mode plus a tap) must not start, and pay for, another.
     guard !isTranslatingArticle else { return }
-    let articleText = article.textContent ?? HTMLHelper.stripTags(article.contentHTML ?? "")
+    // With images, send the text with [IMG:n] markers so the translation can show them in place.
+    let marked = ArticleImages.markedText(html: article.contentHTML ?? "")
+    let articleText =
+      marked.urls.isEmpty
+      ? article.textContent ?? HTMLHelper.stripTags(article.contentHTML ?? "") : marked.text
     guard !articleText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
     isTranslatingArticle = true

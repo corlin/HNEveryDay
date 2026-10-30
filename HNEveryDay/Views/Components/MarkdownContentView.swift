@@ -10,6 +10,8 @@ import SwiftUI
 /// Custom Markdown renderer that properly handles headers, bullets, and bold text
 struct MarkdownContentView: View {
   let content: String
+  /// Images for `[IMG:n]` marker lines (translated articles); markers without an image are dropped.
+  var images: [URL] = []
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
@@ -36,6 +38,14 @@ struct MarkdownContentView: View {
       }
 
       id += 1
+
+      // Image marker [IMG:n]
+      if let index = ArticleImages.markerIndex(trimmed) {
+        if images.indices.contains(index - 1) {
+          result.append(ParsedLine(id: id, view: AnyView(ArticleImageView(url: images[index - 1]))))
+        }
+        continue
+      }
 
       // Header ##
       if trimmed.hasPrefix("## ") {
@@ -75,7 +85,7 @@ struct MarkdownContentView: View {
           ParsedLine(
             id: id,
             view: AnyView(
-              Text(parseBoldText(trimmed))
+              Text(parseBoldText(ArticleImages.stripInlineMarkers(trimmed)))
                 .font(.subheadline)
                 .foregroundStyle(.primary)
                 .lineSpacing(6)
@@ -114,6 +124,25 @@ struct MarkdownContentView: View {
     // Add remaining text
     result += AttributedString(current)
     return result
+  }
+}
+
+/// An article image that takes no space until it loads, so a blocked or broken image leaves no gap.
+private struct ArticleImageView: View {
+  let url: URL
+
+  var body: some View {
+    AsyncImage(url: url) { phase in
+      if let image = phase.image {
+        image
+          .resizable()
+          .scaledToFit()
+          .frame(maxWidth: .infinity)
+          .clipShape(RoundedRectangle(cornerRadius: 8))
+          .padding(.vertical, 4)
+      }
+    }
+    .accessibilityHidden(true)
   }
 }
 
